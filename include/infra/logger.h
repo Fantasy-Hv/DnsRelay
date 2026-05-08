@@ -4,9 +4,16 @@
 
 #ifndef DNSRELAY_LOG_H
 #define DNSRELAY_LOG_H
+//日志输出方式：0.stdout 1.file 2.syslog
+#define KEY_LOG_OUTPUT "log_output"
+#define KEY_LOG_LEVEL "log_level"
 typedef enum {
-    DEBUG, INFO, WARN, ERROR
+     LOG_STDOUT,LOG_FILE,LOG_SYSLOG
+}LogOutput;
+
+typedef enum {
+     ERROR ,WARN,INFO,DEBUG
 }LogLevel;
-int do_log(LogLevel level,const char* format, ...);
-void set_level(LogLevel level);
+
+void do_log(LogLevel level,const char* format, ...);
 #endif //DNSRELAY_LOG_H

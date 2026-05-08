@@ -15,6 +15,11 @@ add_executable(DnsRelay src/service/ui/main.c
         src/service/server.c
         src/infra/stl.c
         src/infra/logger.c
-        src/infra/thread.c
-        src/infra/socket.c)
+        src/infra/linux/thread_posix.c
+        src/infra/windows/sock_win.c
+        src/infra/linux/sock_linux.c
+        src/infra/windows/thread_win.c
+        include/infra/sys.h
+        src/infra/linux/sys_linux.c
+        src/infra/windows/sys_win.c)
 target_include_directories(DnsRelay PRIVATE ${CMAKE_SOURCE_DIR}/include)

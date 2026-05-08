@@ -7,21 +7,21 @@
 #include "infra/stl.h"
 #include <arpa/inet.h>
 #define MAX_PACKET_SIZE 512
-#define QR(flags) (flags >> 15)&1
+#define QR(flags) ((flags >> 15)&1)
 
-#define OPCODE(flags) (flags >> 12)&0xf
+#define OPCODE(flags) ((flags >> 12)&0xf)
 
-#define AA(flags) (flags >> 10)&1
+#define AA(flags) ((flags >> 10)&1)
 
-#define TC(flags) (flags >> 9)&1
+#define TC(flags) ((flags >> 9)&1)
 
-#define RD(flags) (flags >> 8)&1
+#define RD(flags) ((flags >> 8)&1)
 
-#define RA(flags) (flags >> 7)&1
+#define RA(flags) ((flags >> 7)&1)
 
-#define Z(flags) (flags >> 4)&0x7
+#define Z(flags) ((flags >> 4)&0x7)
 
-#define RCODE(flags) (flags)&0xf
+#define RCODE(flags) ((flags)&0xf)
 // typedef enum { V4,V6 } IpVersion;
 // typedef struct {
 //     IpVersion version;
@@ -115,4 +115,10 @@ void free_pack(DnsPacket* dns_pack);
  */
 int lookup_cache(const char* domain,LinkedList* cache_answer) ;
 
+/**
+ * 将数据包转为字符串方便日志格式化输出，结尾带\0
+ * @param dns_pack dns包
+ * @return 字符串地址
+ */
+char* to_log_string_packet(const DnsPacket* dns_pack);
 #endif //DNSRELAY_PROTOCOL_H
