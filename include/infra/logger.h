@@ -14,6 +14,6 @@ typedef enum {
 typedef enum {
      ERROR ,WARN,INFO,DEBUG
 }LogLevel;
-
+void log_init();
 void do_log(LogLevel level,const char* format, ...);
 #endif //DNSRELAY_LOG_H

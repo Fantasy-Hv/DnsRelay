@@ -19,7 +19,6 @@ void log_init() {
     get_property(KEY_LOG_OUTPUT, &output_mode);
     if (output_mode==LOG_STDOUT)
         log_output = printf;
-
 }
 
 void do_log(LogLevel level, const char *format, ...) {

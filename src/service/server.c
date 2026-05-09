@@ -29,8 +29,10 @@
 #include "dns/protocol.h"
 static long packet_timeout = 0;
 static SocketHolder socket_holder;
+//
+static HashMap *sessions_map; // 用于查询
+static PriorityQueue *sessions_queue; //用于超时管理
 
-PriorityQueue *sessions;
 Session * create_session(uint16_t client_id) {
     Session* session = malloc(sizeof(Session));
     session->timestamp = 0;
@@ -88,7 +90,7 @@ int init_socket() {
  * 检查会话队列，处理超时会话
  */
 void check_timeout() {
-    Session *session = priority_queue_peek(sessions);
+    Session *session = priority_queue_peek(sessions_queue);
     if (!session)return ;
     do {
         struct timeval timeout;
@@ -96,34 +98,43 @@ void check_timeout() {
         if (timeout.tv_sec > 0 || timeout.tv_usec > 0)
             return ;
         handle_timeout(session);
-        session = priority_queue_peek(sessions);
+        session = priority_queue_peek(sessions_queue);
     }while (session);
 }
 
+int handle_dns_packet(const DnsPacket*packet) {
+    //todo 绑定会话
+    //
+    // make_request(packet,socket_holder);
+    return 0;
+}
 int server_loop() {
     fd_set readfds;
     FD_ZERO(&readfds);
     FD_SET(*(int*)socket_holder, &readfds);
 
     while (1) {
-        Session * earliest_session = priority_queue_peek(sessions);
+        Session * earliest_session = priority_queue_peek(sessions_queue); //fixme 可能为NULL！
         struct timeval next_timeout;
         get_time_remain(earliest_session,&next_timeout);
+
         int stat =select(*(int*)socket_holder+1,&readfds, NULL, NULL, &next_timeout);
 
         if (stat>0) {
             // 接收dns数据包
             char* buf = malloc(SOCKET_REV_BUF_SIZE);
             int rev_cnt = 0;
+            DnsPacket * packet = malloc(sizeof(DnsPacket));
             while (( rev_cnt =  socket_recv_nowait(socket_holder,buf,SOCKET_REV_BUF_SIZE))>0){
-                DnsPacket * packet;
-                if (deserialize_alloc(buf,rev_cnt,&packet))
+                if (deserialize_reuse(buf,rev_cnt,packet))
                     do_log(ERROR,"dns packet deserialize error");
-                do_log(DEBUG,to_string_packet(packet));
-                //处理dns报文。
+                do_log(DEBUG,to_log_string_packet(packet));
+                //todo 处理dns报文以及会话管理
+                handle_dns_packet(packet);
             }
 
         }
+        //todo 响应会话超时
 
     }
 
@@ -138,7 +149,7 @@ int server_start() {
     //todo 创建守护线程
 
     //创建会话队列
-    sessions = priority_queue_create(session_comparator);
+    sessions_queue = priority_queue_create(session_comparator);
     //初始化socket
     if (init_socket())
         return 1;

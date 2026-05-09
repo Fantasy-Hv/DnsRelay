@@ -4,6 +4,7 @@
 
 #ifndef DNSRELAY_STL_H
 #define DNSRELAY_STL_H
+#include <stdint.h>
 typedef void* T; //解耦具体类型
 typedef int (*Comparator)(T a,T b); // 比较函数，返回“a-b”的值，以此判断大小关系
 typedef int (*Extractor)(T a); // 提取函数，提取元素的key,用来唯一标识元素

@@ -5,7 +5,7 @@
 #ifndef DNSRELAY_PROTOCOL_H
 #define DNSRELAY_PROTOCOL_H
 #include "infra/stl.h"
-#include <arpa/inet.h>
+#include <stdint.h>
 #define MAX_PACKET_SIZE 512
 #define QR(flags) ((flags >> 15)&1)
 
@@ -121,4 +121,12 @@ int lookup_cache(const char* domain,LinkedList* cache_answer) ;
  * @return 字符串地址
  */
 char* to_log_string_packet(const DnsPacket* dns_pack);
+
+/**
+ *根据下游请求构造上游请求并发送
+ * @param client_pack 下游请求
+ * @param socket_holder 套接字
+ * @return
+ */
+int request_upstream(const DnsPacket* client_pack,SocketHolder socket_holder);
 #endif //DNSRELAY_PROTOCOL_H
