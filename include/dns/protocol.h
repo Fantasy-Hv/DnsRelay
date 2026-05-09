@@ -6,6 +6,7 @@
 #define DNSRELAY_PROTOCOL_H
 #include "infra/stl.h"
 #include <stdint.h>
+#include "dns/cache.h"
 #define MAX_PACKET_SIZE 512
 #define QR(flags) ((flags >> 15)&1)
 
@@ -110,10 +111,11 @@ void free_pack(DnsPacket* dns_pack);
 /**
  * 查询dns缓存
  * @param domain 要查询的域名
- * @param cache_answer 查询结果
+ * @param cache_answer 查询结果 IpAddr* 列表
+ * @param cahe dns缓存
  * @return 命中缓存返回0,未命中返回1,异常返回-1
  */
-int lookup_cache(const char* domain,LinkedList* cache_answer) ;
+int lookup_cache(const char* domain,LinkedList* cache_answer,Cache* cahe) ;
 
 /**
  * 将数据包转为字符串方便日志格式化输出，结尾带\0
@@ -129,4 +131,6 @@ char* to_log_string_packet(const DnsPacket* dns_pack);
  * @return
  */
 int request_upstream(const DnsPacket* client_pack,SocketHolder socket_holder);
+
+
 #endif //DNSRELAY_PROTOCOL_H

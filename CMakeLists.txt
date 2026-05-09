@@ -17,7 +17,7 @@ add_executable(DnsRelay src/service/main.c
         src/infra/logger.c
         src/infra/linux/thread_posix.c
         src/infra/windows/sock_win.c
-        src/infra/linux/sock_linux.c
+        src/infra/linux/sock_posix.c
         src/infra/windows/thread_win.c
         include/infra/sys.h
         src/infra/linux/sys_linux.c

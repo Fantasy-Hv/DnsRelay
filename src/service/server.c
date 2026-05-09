@@ -27,7 +27,8 @@
 #include "infra/stl.h"
 #include "infra/sys.h"
 #include "dns/protocol.h"
-static long packet_timeout = 0;
+static long packet_timeout = VALUE_DEFAULT_PACKET_TIMEOUT;
+static Cache *cache;
 static SocketHolder socket_holder;
 //
 static HashMap *sessions_map; // 用于查询
@@ -37,10 +38,10 @@ Session * create_session(uint16_t client_id) {
     Session* session = malloc(sizeof(Session));
     session->timestamp = 0;
     session->retry_times = 0;
-    session->client_id = client_id;
+    session->query_id = client_id;
     return session;
 }
-int get_time_remain(const Session *session,struct timeval * timeval) {
+static int get_time_remain(const Session *session,struct timeval * timeval) {
     int64_t diff = sys_time_ms() - session->timestamp;
     timeval->tv_sec  =  diff/ 1000;
     timeval->tv_usec = (diff % 1000) * 1000;
@@ -53,18 +54,18 @@ int get_time_remain(const Session *session,struct timeval * timeval) {
  * @param session
  * @return
  */
-int handle_timeout(Session* session) {
+static int do_handle_timeout(Session* session) {
 
     return 0;
 }
 
 /**
- * 请求会话比较函数，用于给会话排序
+ * 会话比较函数，用于给会话排序、判等
  * @param a
  * @param b
  * @return
  */
-int session_comparator(void* a, void* b) {
+static int session_comparator(void* a, void* b) {
     //时间早的放前面
     long long interval = ((Session*)a)->timestamp - ((Session*)b)->timestamp;
     if (interval>0)return 1;
@@ -76,20 +77,21 @@ int session_comparator(void* a, void* b) {
  * 配置dns所需的特定socket
  * @return
  */
-int init_socket() {
+static int init_socket() {
      if (socket_create(UDP,&socket_holder))
-        return 1;
+        return -1;
     int port;
     if (get_property(KEY_SERVER_PORT,&port))
         port = VALUE_DEFAULT_SERVER_PORT;
-    socket_bind(socket_holder, port);
+    if (socket_bind(socket_holder, port))
+        return -1;
     return 0;
 }
 
 /**
  * 检查会话队列，处理超时会话
  */
-void check_timeout() {
+static void batch_timeout() {
     Session *session = priority_queue_peek(sessions_queue);
     if (!session)return ;
     do {
@@ -97,23 +99,41 @@ void check_timeout() {
         get_time_remain(session,&timeout);
         if (timeout.tv_sec > 0 || timeout.tv_usec > 0)
             return ;
-        handle_timeout(session);
+        do_handle_timeout(session);
         session = priority_queue_peek(sessions_queue);
     }while (session);
 }
 
-int handle_dns_packet(const DnsPacket*packet) {
+/**
+ * 处理收到的dns包
+ * 包可以分为请求包和响应包
+ * 请求包：解析内容->如果本地能回复，直接构造并返回响应
+ *        ->否则，转发请求
+ * 响应包：解析内容->如果本地有对应会话，构造响应返回给客户端
+ *        ->否则，丢弃
+  一个请求的完整生命周期:
+      1.收到客户端请求
+      2.解析报文：
+        2.1若本地可回复，构造响应返回，请求结束
+        2.2若本地不可回复，转发请求给上游
+
+ * @param packet
+ * @param source_ip
+ * @return
+ */
+static int handle_dns_packet(const DnsPacket*packet,IpAddr source_ip) {
     //todo 绑定会话
     //
     // make_request(packet,socket_holder);
     return 0;
 }
-int server_loop() {
+static void server_loop() {
     fd_set readfds;
     FD_ZERO(&readfds);
     FD_SET(*(int*)socket_holder, &readfds);
 
     while (1) {
+        //准备select参数
         Session * earliest_session = priority_queue_peek(sessions_queue); //fixme 可能为NULL！
         struct timeval next_timeout;
         get_time_remain(earliest_session,&next_timeout);
@@ -121,31 +141,33 @@ int server_loop() {
         int stat =select(*(int*)socket_holder+1,&readfds, NULL, NULL, &next_timeout);
 
         if (stat>0) {
-            // 接收dns数据包
+            // 收取dns数据包
             char* buf = malloc(SOCKET_REV_BUF_SIZE);
-            int rev_cnt = 0;
+            int rev_cnt = 0;IpAddr source_ip;
             DnsPacket * packet = malloc(sizeof(DnsPacket));
-            while (( rev_cnt =  socket_recv_nowait(socket_holder,buf,SOCKET_REV_BUF_SIZE))>0){
+            while (( rev_cnt =  socket_recv_nowait(socket_holder,buf,SOCKET_REV_BUF_SIZE,&source_ip))>0){
                 if (deserialize_reuse(buf,rev_cnt,packet))
                     do_log(ERROR,"dns packet deserialize error");
                 do_log(DEBUG,to_log_string_packet(packet));
-                //todo 处理dns报文以及会话管理
-                handle_dns_packet(packet);
+                //处理dns报文以及会话管理
+                handle_dns_packet(packet,source_ip);
             }
-
+        }else if (stat==0) { //超时处理
+            batch_timeout();
+        }else {
+            do_log(ERROR,"select error : %s",get_syscall_error().msg);
         }
-        //todo 响应会话超时
-
     }
 
-    return 0;
 }
 int server_start() {
     //初始化缓存
     int cache_size ;
     if (get_property(KEY_CACHE_SIZE, &cache_size))
         cache_size = VALUE_DEFAULT_CACHE_SIZE;
-    cache_init(cache_size);
+    cache = cache_create(cache_size);
+    //初始化配置
+    get_property(KEY_PACKET_TIMEOUT,&packet_timeout);
     //todo 创建守护线程
 
     //创建会话队列

@@ -18,15 +18,14 @@
 #define SOCKET_REV_BUF_SIZE 1024
 typedef enum {
     WAITING_UPSTREAM, //等待上游服务器响应
-    PACKAGING, //正在打包响应
-    DONE //完成
+    DONE //完成，或者超时且不再重试
 }SessionState;
 typedef struct {
-    int64_t timestamp; //请求转发时的时间戳，如果请求不需要转发，为0.
-    uint16_t client_id;
-    uint16_t transaction_id;
-    SessionState state;
+    uint16_t query_id; // 客户端请求的id
     IpAddr client_ip;
+    SessionState state;
+    int64_t timestamp; //上一次请求转发时的时间戳，如果请求不需要转发，为0.
+    uint16_t transfer_id; // 请求转发时使用的id
     char retry_times; // 已经重试的次数
 }Session;
 
