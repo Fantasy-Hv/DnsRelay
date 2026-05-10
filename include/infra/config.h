@@ -11,12 +11,12 @@
  * @param value 值
  * @return 是否存在该配置，0为存在，1为不存在
  */
-int get_property(const char *key,void* value);
+int config_get(const char *key,void* value);
 
-int set_property(const char *key,void* value);
+int config_set(const char *key,void* value);
 /**
  * 加载配置文件
  * @return
  */
-int load_config();
+int config_load();
 #endif //DNSRELAY_CONFIG_H

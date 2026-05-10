@@ -220,4 +220,3 @@ dnsrelay [-d | -dd] [dns-server-ipaddr] [filename]
 
 ---
 
-以上即为该课程设计项目的全部需求，涵盖了功能、协议、工程、测试、提交等各个维度。
