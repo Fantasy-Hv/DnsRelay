@@ -1,6 +1,7 @@
 //
 // Created by yian on 2026/5/9.
 //
+// 核心模块！！！其他模块可以没有，但是这个必须很完善。
 #include "dns/protocol.h"
 #include "dns/cache.h"
 #include <stdlib.h>
@@ -58,7 +59,7 @@ DnsPacket* pack_create() {
  * @param packet2
  * @return
  */
-int packet_comparator(T packet1, T packet2) {
+int packet_equals(T packet1, T packet2) {
     DnsPacket* pack1 = packet1;
     DnsPacket* pack2 =packet2;
     return pack1->header.id - pack2->header.id;
@@ -67,20 +68,30 @@ int packet_comparator(T packet1, T packet2) {
  * 将数据包转为字符串方便日志格式化输出，结尾带\0
  * @param dns_pack dns包
  * @return 字符串地址
+ * 低优先级
  */
 char* to_log_string_packet(const DnsPacket* dns_pack) {
     return NULL;
 }
-
 /**
- *解析dns查询包，并构建下一步要发送的包
- *@param recv 接收到的dns包
- *@param send 下一步要发送的dns包,如果是发给上游的请求，本方法会填写代理id.
- *@return 发送的方向：CLIENT为要发送给客户端，UPSTREAM为要发送给上游服务器
+ * 包是否为请求包
+ * @param packet
+ * @return 是-1,否-0
  */
-PacketDirection cook_query(const DnsPacket* recv,DnsPacket** send) {
-    return CLIENT;
+int packet_is_query(const DnsPacket* packet) {
+    return 0;
 }
+/**
+ * 将下游的查询包转为发给上游的查询包
+ * @param query_pack 客户端请求
+ * @param relay_id 转发包使用的id
+ * @param relay_pack 生成的转发包
+ * @return
+ */
+int packe_cook_relay(const DnsPacket * query_pack,uint16_t relay_id,DnsPacket** relay_pack) {
+    return 0;
+}
+
 
 /**
  * 根据的上游响应构造下游响应。
@@ -91,7 +102,7 @@ PacketDirection cook_query(const DnsPacket* recv,DnsPacket** send) {
 void pack_cook_response(const DnsPacket* recv,DnsPacket** send,uint16_t client_id){}
 
 
-int protocol_init() {
-    dns_cache_init();
-    return 0;
+PacketDirection pack_answer_locally(const DnsPacket* query,DnsPacket** response) {
+    return CLIENT;
 }
+

@@ -125,4 +125,7 @@ int session_open(uint16_t client_id,NetEnd client_ip,DnsPacket * relay_pack) {
     return 0;
 }
 
+char* session_to_log_str(const Session *session) {
+    return NULL;
+}
 

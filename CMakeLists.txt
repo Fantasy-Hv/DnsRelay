@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 4.1)
 project(DnsRelay C)
 
 set(CMAKE_C_STANDARD 23)
-
+find_package(Threads REQUIRED)
 add_executable(DnsRelay src/main.c
         include/infra/stl.h
         include/infra/logger.h
@@ -28,5 +28,8 @@ add_executable(DnsRelay src/main.c
         src/dns/dns_cache.c
         src/infra/config_center.c
         include/dns/id.h
-        src/dns/id_factory.c)
+        src/dns/id_factory.c
+        include/server/daemon.h
+        src/server/daemons.c)
+target_link_libraries(DnsRelay PRIVATE Threads::Threads)
 target_include_directories(DnsRelay PRIVATE ${CMAKE_SOURCE_DIR}/include)

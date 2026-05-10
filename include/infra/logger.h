@@ -16,4 +16,5 @@ typedef enum {
 }LogLevel;
 void log_init();
 void do_log(LogLevel level,const char* format, ...);
+
 #endif //DNSRELAY_LOG_H

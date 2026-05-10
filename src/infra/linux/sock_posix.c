@@ -11,7 +11,7 @@
 #include <sys/types.h>   // fd_set类型
 #include <unistd.h>      // close
 #include <errno.h>       // errno
-int socket_create(TransportProtocol protocol,SocketHolder socket) {
+int socket_create(TransportProtocol protocol,SocketHolder *socket) {
     return 0;
 }
 
@@ -38,5 +38,14 @@ int socket_recv_nowait(SocketHolder socket,void *buf, size_t buf_len,const NetEn
 int socket_release(SocketHolder socket) {
     return 0;
 }
-
+/**
+ * 阻塞当前线程，如果socket有数据或者超时，唤醒线程,使用系统调用select实现。
+ * @param socket_holder
+ * @param timeout 超时时间，如果为负数表示永不超时
+ * @param socket_cnt 等待的socket数量
+ * @return
+ */
+int socket_sleep_on(const SocketHolder *socket_holder,int socket_cnt,ms timeout) {
+    return 0;
+}
 #endif

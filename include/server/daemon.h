@@ -1,0 +1,9 @@
+//
+// Created by yian on 2026/5/10.
+//
+//各个守护线程run函数的定义
+#ifndef DNSRELAY_DAEMON_H
+#define DNSRELAY_DAEMON_H
+void* daemon_dnscache_ttl(void*);
+
+#endif //DNSRELAY_DAEMON_H

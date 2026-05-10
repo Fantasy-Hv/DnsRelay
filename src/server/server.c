@@ -9,11 +9,12 @@
 #include "infra/socket.h"
 #include "server/session.h"
 #include "server/server.h"
-
+#include "infra/thread.h"
 #include "infra/stl.h"
 #include "infra/sys.h"
 #include "dns/protocol.h"
 #include "dns/id.h"
+#include "server/daemon.h"
 static ms request_timeout = VALUE_DEFAULT_REQUEST_TIMEOUT*1000;
 static int max_retry_time = VALUE_DEFAULT_MAX_RETRY_TIME;
 #define DNS_RECV_BUF_SIZE 1024
@@ -77,7 +78,7 @@ static NetEnd* pick_upstream() {
  * @return
  */
 static int init_socket() {
-     if (socket_create(UDP,socket_holder))
+     if (socket_create(UDP,&socket_holder))
         return -1;
     int port;
     if (config_get(KEY_SERVER_PORT,&port))
@@ -132,7 +133,7 @@ static void batch_timeout() {
 static int handle_dns_packet( DnsPacket*packet_in,NetEnd source_end) {
     DnsPacket* packet_out ;
     if (packet_is_query(packet_in)) { //请求包
-        PacketDirection direction = pack_answer_local(packet_in,&packet_out);
+        PacketDirection direction = pack_answer_locally(packet_in,&packet_out);
         if (direction==CLIENT) { //本地可以直接响应
             packet_send(packet_out,&source_end);
             pack_free(packet_out);
@@ -176,7 +177,7 @@ static void server_loop() {
             next_timeout = -1;
         else get_session_timeout_remain(earliest_session,request_timeout,&next_timeout);
 
-        const int stat = select(&socket_holder,1,next_timeout);
+        const int stat = socket_sleep_on(&socket_holder,1,next_timeout);
 
         if (stat>=0) { // 收取dns数据包
             DnsPacket * packet ;NetEnd source_end;
@@ -185,7 +186,10 @@ static void server_loop() {
             batch_timeout();
         }
         // 错误
-        else do_log(ERROR,"select error : %s",get_syscall_error().msg);
+        else {
+            do_log(ERROR,"socket_sleep_on error : %s",get_syscall_error().msg);
+            return;
+        }
     }
 }
 
@@ -199,13 +203,18 @@ int server_start() {
     if (linked_list_is_empty(upstreams))
         do_log(WARN,"server:upstream not configured");
     //todo 创建守护线程
-
+    Thread thread ;
+    thread_create(&thread,daemon_dnscache_ttl,NULL); //定时清理缓存
     //初始化socket
-    init_socket();
+    if (init_socket()) {
+        do_log(ERROR,"server : socket init failed");
+        return 1;
+    }
     //初始化session工厂
     session_factory_init();
     //进入主循环,处理请求
     server_loop();
+
     return 0;
 }
 

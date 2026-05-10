@@ -10,7 +10,6 @@
  */
 int main(int argc,char* argv[]) {
 
-    config_load();
     //todo 解析命令行参数
     //todo 注入命令行参数到配置层
     server_start();
