@@ -107,7 +107,7 @@ int packet_is_query(const DnsPacket* packet);
  *如果需要查询上游，返回null
  *@return CLIENT-构造成功，可以返回响应，UPSTREAM-构造失败，需要请求上游，response 指向NULL
  */
-PacketDirection pack_make_local_answer(const DnsPacket* query,DnsPacket** response);
+PacketDirection pack_make_local_ans(const DnsPacket* query,DnsPacket** response);
 
 /**
  * 将下游的查询包转为发给上游的查询包

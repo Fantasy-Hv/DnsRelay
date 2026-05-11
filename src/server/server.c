@@ -126,14 +126,12 @@ static void batch_timeout() {
  * 处理收到的dns包
  * @param packet_in
  * @param source_end
- * packet包内存管理 ：1.如果本地回复，会被free。2.如果请求转发，由retry_cache持有,超时处理逻辑管理
- * 3.如果是响应包，会被free.
  * @return
  */
 static int handle_dns_packet( DnsPacket*packet_in,NetEnd source_end) {
     DnsPacket* packet_out ;
     if (packet_is_query(packet_in)) { //请求包
-        PacketDirection direction = pack_answer_locally(packet_in,&packet_out);
+        PacketDirection direction = pack_make_local_ans(packet_in,&packet_out);
         if (direction==CLIENT) { //本地可以直接响应
             packet_send(packet_out,&source_end);
             pack_free(packet_out);
@@ -145,7 +143,7 @@ static int handle_dns_packet( DnsPacket*packet_in,NetEnd source_end) {
                 do_log(ERROR, "server : relay id exhausted");
                 return -1;
             }
-            packe_cook_relay(packet_in, relay_id, &packet_out);
+            pack_make_relay(packet_in, relay_id, &packet_out);
             //发送中继包
             packet_send(packet_out, pick_upstream());
             // 开启会话，将该包存储在会话中
@@ -157,17 +155,14 @@ static int handle_dns_packet( DnsPacket*packet_in,NetEnd source_end) {
         //获取对应session
         Session * session = session_get(packet_in->header.id);
         if (session) { //发送给客户端
-            pack_cook_response(packet_in,&packet_out,session->client_id);
+            pack_make_response_relay(packet_in,&packet_out,session->client_id);
             packet_send(packet_out,&session->client_ip);
             //结束会话
             session_close(session);
             id_free(packet_in->header.id);
-            pack_free(packet_in);
-        } else {
-            //丢弃包
-            do_log(DEBUG,"server : no session match rsp, drop pack");
-            pack_free(packet_in);
+            pack_free(packet_out);
         }
+        else do_log(DEBUG,"server : no session match rsp, drop pack");
     }
     return 0;
 }
@@ -186,8 +181,10 @@ static void server_loop() {
 
         if (stat>=0) { // 收取dns数据包
             DnsPacket * packet ;NetEnd source_end;
-            while (!pack_recv(&packet,&source_end))
-                    handle_dns_packet(packet,source_end);
+            while (!pack_recv(&packet,&source_end)) {
+                handle_dns_packet(packet,source_end);
+                pack_free(packet);
+            }
             batch_timeout();
         }
         // 错误

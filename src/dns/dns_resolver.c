@@ -109,7 +109,7 @@ void pack_make_inner_error(const DnsPacket* query, DnsPacket** answer) {
 
 }
 
-PacketDirection pack_make_local_answer(const DnsPacket* query,DnsPacket** response) {
+PacketDirection pack_make_local_ans(const DnsPacket* query,DnsPacket** response) {
     return CLIENT;
 }
 
