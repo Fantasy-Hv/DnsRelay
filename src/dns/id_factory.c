@@ -20,7 +20,7 @@ static void id_pool_init() {
 
 int id_alloc(uint16_t* id) {
     if (id == NULL) {
-        return 0;
+        return 1;
     }
 
     if (!initialized) {
@@ -28,13 +28,13 @@ int id_alloc(uint16_t* id) {
     }
 
     if (top < 0) {
-        return 0;
+        return 1;
     }
 
     *id = ids[top];
     st[*id] = 1;
     top--;
-    return 1;
+    return 0;
 }
 
 void id_free(uint16_t id) {
