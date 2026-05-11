@@ -140,7 +140,12 @@ static int handle_dns_packet( DnsPacket*packet_in,NetEnd source_end) {
         } // 需要转发
         else if (!linked_list_is_empty(upstreams)) {
             //构造中继包，申请id
-            packe_cook_relay(packet_in,id_alloc(),&packet_out);
+            uint16_t relay_id;
+            if (!id_alloc(&relay_id)) {
+                do_log(ERROR, "server : relay id exhausted");
+                return -1;
+            }
+            packe_cook_relay(packet_in, relay_id, &packet_out);
             //发送中继包
             packet_send(packet_out, pick_upstream());
             // 开启会话，将该包存储在会话中
@@ -217,5 +222,4 @@ int server_start() {
 
     return 0;
 }
-
 
