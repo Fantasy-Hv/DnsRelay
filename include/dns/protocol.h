@@ -107,7 +107,7 @@ int packet_is_query(const DnsPacket* packet);
  *如果需要查询上游，返回null
  *@return CLIENT-构造成功，可以返回响应，UPSTREAM-构造失败，需要请求上游，response 指向NULL
  */
-PacketDirection pack_answer_locally(const DnsPacket* query,DnsPacket** response);
+PacketDirection pack_make_local_answer(const DnsPacket* query,DnsPacket** response);
 
 /**
  * 将下游的查询包转为发给上游的查询包
@@ -116,15 +116,15 @@ PacketDirection pack_answer_locally(const DnsPacket* query,DnsPacket** response)
  * @param relay_pack 生成的转发包
  * @return
  */
-int packe_cook_relay(const DnsPacket * query_pack,uint16_t relay_id,DnsPacket** relay_pack) ;
+int pack_make_relay(const DnsPacket * query_pack,uint16_t relay_id,DnsPacket** relay_pack) ;
 
 /**
- *
+ * 根据上游应答构造响应包
  * @param recv 上游应答
  * @param send 返回给客户端的响应
  * @param client_id 客户端查询包的id
  */
-void pack_cook_response(const DnsPacket* recv,DnsPacket** send,uint16_t client_id);
+void pack_make_response_relay(const DnsPacket* recv,DnsPacket** send,uint16_t client_id);
 
 /**
  * @brief 将网络字节流反序列化为dns包
@@ -142,4 +142,10 @@ int pack_deserialize(const char* raw_pack,int len,DnsPacket** packet) ;
  * @return 序列化后的dns包大小，异常返回-1
  */
 int pack_serialize(const DnsPacket* dns_pack,char* packet_buf);
+
+/**
+ * 生成服务器内部错误响应包
+ *
+ */
+void pack_make_inner_error(const DnsPacket* query,DnsPacket ** answer ) ;
 #endif //DNSRELAY_PROTOCOL_H

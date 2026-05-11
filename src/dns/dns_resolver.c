@@ -42,7 +42,8 @@ int pack_deserialize(const char* raw_pack,int len,DnsPacket** packet) {
  *
  * @param dns_pack 释放该dns包占用的内存
  */
-void pack_free(DnsPacket* dns_pack){}
+void pack_free(DnsPacket* dns_pack) {
+}
 
 
 /**
@@ -88,7 +89,7 @@ int packet_is_query(const DnsPacket* packet) {
  * @param relay_pack 生成的转发包
  * @return
  */
-int packe_cook_relay(const DnsPacket * query_pack,uint16_t relay_id,DnsPacket** relay_pack) {
+int pack_make_relay(const DnsPacket * query_pack,uint16_t relay_id,DnsPacket** relay_pack) {
     return 0;
 }
 
@@ -99,10 +100,16 @@ int packe_cook_relay(const DnsPacket * query_pack,uint16_t relay_id,DnsPacket** 
  * @param send 返回给客户端的响应
  * @param client_id 客户端查询请求的id
  */
-void pack_cook_response(const DnsPacket* recv,DnsPacket** send,uint16_t client_id){}
+void pack_make_response_relay(const DnsPacket* recv,DnsPacket** send,uint16_t client_id){}
 
+/**
+ * 生成服务器内部失败响应包
+ */
+void pack_make_inner_error(const DnsPacket* query, DnsPacket** answer) {
 
-PacketDirection pack_answer_locally(const DnsPacket* query,DnsPacket** response) {
+}
+
+PacketDirection pack_make_local_answer(const DnsPacket* query,DnsPacket** response) {
     return CLIENT;
 }
 
