@@ -15,11 +15,11 @@
 
 typedef enum {
     QUERY, // 标准查询请求
-    IQUERY, // 反向查询请求，已弃用，收到此类型包应返回NOTIMP
+    IQUERY, // 反向查询请求，RFC3425宣布弃用，但是课程要求支持 :(
     STATUS, // 服务器状态查询请求
 }OpCode;
 #define OPCODE_GET(flags) ((flags >> 12)&0xf)
-
+//AA标志响应中的 Answer 段来自该域名的权威名称服务器
 #define AA_GET(flags) ((flags >> 10)&1)
 #define AA_SET(flags) (flags|= 0x0400)
 #define TC_GET(flags) ((flags >> 9)&1)
@@ -55,30 +55,30 @@ typedef enum {
 typedef struct  {
     uint16_t id;
     uint16_t flags;
-    uint16_t qcount;
-    uint16_t answer_RRs;
-    uint16_t authority_RRs;
-    uint16_t additional_RRs;
+    uint16_t qcount; //问题段中的条目数量，RFC9619规定只能为0或1,其他一律返回NOTIMP/FORMERR :)
+    uint16_t answer_RRs; // 回答段的条目数量
+    uint16_t authority_RRs; //权威段的条目数量
+    uint16_t additional_RRs; // 附加段的条目数量
 } SectionHeader;
 
 /**
  * question 节
  */
 typedef struct {
-    char* qname; //不定长字节自解码字段
+    char* qname; ////域名，dns域名编码，不定长字节自解码字段
     uint16_t qtype; // 查询类型
     uint16_t qclass;
 }SectionQuestion;
 //下面两类值在question和RR中都有使用
 typedef enum { // 不要随意更改顺序
     QTYPE_A = 1, // IPv4 地址
-    QTYPE_NS, //权威名称服务器
-    QTYPE_CNAME = 5, //域名的规范名称
+    QTYPE_NS, //权威名称服务器，用于auth段中
+    QTYPE_CNAME = 5, //域名的规范名称 用于answer段
     QTYPE_SOA,//授权区域起始
     QTYPE_NULL=9,//空资源记录 (实验性)
     QTYPE_WKS,//知名服务描述
     QTYPE_PTR,//域名指针 (用于反向解析)
-    QTYPE_HINFO,//主机信息 (CPU和操作系统)
+    QTYPE_HINFO,//主机信息 (CPU和操作系统) 用于opcode=status的answer段
     QTYPE_MINFO,//邮箱或邮件列表信息
     QTYPE_MX,
     QTYPE_TXT,//文本字符串
@@ -87,23 +87,33 @@ typedef enum { // 不要随意更改顺序
 typedef enum {
     QCLASS_IN=1 // 互联网地址类
 }Class;
+
+/**
+ * Rdata格式
+ *  class   type   rdata
+ *  IN      A       大端序4字节ipv4地址
+ *  IN      AA      大端序16字节ipv6地址
+ *  IN    CNAME     name的标准名称，dns域名编码
+ *  IN    NS        该区域的权威服务器域名，dns域名编码
+ *  IN    SOA       较为复杂。。。
+ */
 typedef struct {
-    uint32_t ttl;
-    uint16_t type;
-    uint16_t class;
-    uint16_t rdata_length; //rdata长度，以字节为单位
-    char* name;//域名，人类可读形式
-    char* rdata;
-} ResourceRecord;
+    SectionHeader header; //控制信息
+    LinkedList*  questions; // T = SessionQuestion*
+    //这些可能有多条，数量由header给出,下面三个段的列表元素类型T = ResourceRecord*
+    LinkedList*  answers; // 对question的回答
+    LinkedList* authorites; // 权威域名服务器的域名
+    LinkedList* additionals; // 权威域名服务器的ip
+} DnsPacket;
 
 typedef struct {
-    SectionHeader header;
-    LinkedList*  questions; // T = SessionQuestion*
-    //这些可能有多条，数量由header给出,列表元素类型T = ResourceRecord*
-    LinkedList*  answer_RRs;
-    LinkedList* authority_RRs;
-    LinkedList* additional_RRs;
-} DnsPacket;
+    uint32_t ttl; // 缓存过期时间，s
+    uint16_t type; //可用值为Qtype的子集
+    uint16_t class; // 为IN
+    uint16_t rdata_length; //rdata长度，以字节为单位
+    char* name; //该记录对应question中的哪个域名，dns域名编码，
+    char* rdata;
+} ResourceRecord;
 
 
 /**
@@ -119,7 +129,7 @@ void pack_free(DnsPacket* dns_pack);
 DnsPacket* pack_create();
 
 /**
- * 包的比较函数，主要用于判等,仅比较header id.
+ * 包的比较函数，主要用于判等,仅比较header id.已弃用
  * @param packet1
  * @param packet2
  * @return
@@ -140,22 +150,22 @@ char* to_log_string_packet(const DnsPacket* dns_pack);
 int packet_is_query(const DnsPacket* packet);
 
 /**
- *对到来的请求包尝试构建本地应答
- *@param query 客户端请求包
-*@param response 下一步要发送的dns包,如果本机可回答，返回响应包;
- *如果需要查询上游，返回null
- *@return CLIENT-构造成功，可以返回响应，UPSTREAM-构造失败，需要请求上游，response 指向NULL
- */
-PacketDirection pack_make_local_ans(const DnsPacket* query,DnsPacket** response);
-
-/**
  * 将下游的查询包转为发给上游的查询包
  * @param query_pack 客户端请求
  * @param relay_id 转发包使用的id
  * @param relay_pack 生成的转发包
  * @return
  */
-int pack_make_relay(const DnsPacket * query_pack,uint16_t relay_id,DnsPacket** relay_pack) ;
+int pack_make_query_relay(const DnsPacket * query_pack,uint16_t relay_id,DnsPacket** relay_pack) ;
+
+/**
+ *对到来的请求包尝试构建本地应答
+ *@param query 客户端请求包
+*@param response 下一步要发送的dns包,如果本机可回答，返回响应包;
+ *如果需要查询上游，返回null
+ *@return CLIENT-构造成功，可以返回响应，UPSTREAM-构造失败，需要请求上游，response 指向NULL
+ */
+PacketDirection pack_make_response_local(const DnsPacket* query,DnsPacket** response);
 
 /**
  * 根据上游应答构造响应包

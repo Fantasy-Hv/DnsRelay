@@ -14,7 +14,7 @@
  * question节需要根据header的qdcont循环解析
     每个question解析行为是固定的，name字段自解码，qtype和qclass定长需要转换字节序
   RR的解析：分别按照header中指定的数量来循环解析每条RR
-  rr的解析，前面ttl、type、class、datalength都是定长，需要转换字节序，
+  rr的解析，前面ttl、type、class、data length都是定长，需要转换字节序，
   name需要解码，然后rdata直接copy就行了。
   总的来说没有复杂的逻辑
  *2.反序列化dns包
@@ -22,10 +22,17 @@
     question需要循环列表，编码name,qtype、qclass转换字节序
     rr一样，定长字段转换字节序，name编码，rdata直接copy
  二、dns包内容解析，本质上是要回答：如何从一个包构造另一个包，需要仔细研究协议规定的行为
-
     1.header中flags的解析，需要根据值采取相应的行为
     2.question中内容的解析，
  */
+
+/**
+ */
+char* decode_rdata(Qtype qtype,uint16_t,const char * raw_rdata) {
+
+   return NULL;
+}
+
 /**
  * 将人类可读的域名字符串编码为协议可用的字符串
  * @return
@@ -47,7 +54,7 @@ char* decode_name(const char*) {
  * @brief 将dns包结构序列化为网络字节序的字节流
  * @param dns_pack 要序列化的dns包
  * @param packet_buf 序列化缓冲区，必须预先分配足够的内存！
- * @return 序列化后的dns包大小，异常返回-1
+ * @return 序列化后的dns包大小，异常返回-1,
  */
 int pack_serialize(const DnsPacket* dns_pack,char* packet_buf) {
     return 0;
@@ -112,7 +119,7 @@ int packet_is_query(const DnsPacket* packet) {
  * @param relay_pack 生成的转发包
  * @return
  */
-int pack_make_relay(const DnsPacket * query_pack,uint16_t relay_id,DnsPacket** relay_pack) {
+int pack_make_query_relay(const DnsPacket * query_pack,uint16_t relay_id,DnsPacket** relay_pack) {
     return 0;
 }
 
@@ -134,7 +141,7 @@ void pack_make_inner_error(const DnsPacket* query, DnsPacket** answer) {
 
 }
 
-PacketDirection pack_make_local_ans(const DnsPacket* query,DnsPacket** response) {
+PacketDirection pack_make_response_local(const DnsPacket* query,DnsPacket** response) {
     return CLIENT;
 }
 

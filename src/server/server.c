@@ -130,7 +130,7 @@ static void batch_timeout() {
 static int handle_dns_packet( DnsPacket*packet_in,NetEnd source_end) {
     DnsPacket* packet_out ;
     if (packet_is_query(packet_in)) { //请求包
-        PacketDirection direction = pack_make_local_ans(packet_in,&packet_out);
+        PacketDirection direction = pack_make_response_local(packet_in,&packet_out);
         if (direction==CLIENT) { //本地可以直接响应
             packet_send(packet_out,&source_end);
             pack_free(packet_out);
@@ -142,7 +142,7 @@ static int handle_dns_packet( DnsPacket*packet_in,NetEnd source_end) {
                 do_log(ERROR, "server : relay id exhausted");
                 return -1;
             }
-            pack_make_relay(packet_in, relay_id, &packet_out);
+            pack_make_query_relay(packet_in, relay_id, &packet_out);
             //发送中继包
             packet_send(packet_out, pick_upstream());
             // 开启会话，将该包存储在会话中
@@ -203,8 +203,10 @@ int server_start() {
     config_get(KEY_UPSTREAMS,upstreams);
     if (linked_list_is_empty(upstreams))
         do_log(WARN,"server:upstream not configured");
-    //todo 创建守护线程
-     //定时清理缓存
+    //创建守护线程
+    thrd_t cache_ttl;
+    thrd_create(&cache_ttl,daemon_dnscache_ttl,NULL);
+    thrd_detach(cache_ttl);
     //初始化socket
     if (init_socket()) {
         do_log(ERROR,"server : socket init failed");
