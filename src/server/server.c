@@ -3,18 +3,17 @@
 //
 
 
-#include "dns/cache.h"
 #include "infra/config.h"
 #include "infra/logger.h"
 #include "infra/socket.h"
 #include "server/session.h"
 #include "server/server.h"
-#include "infra/thread.h"
 #include "infra/stl.h"
 #include "infra/sys.h"
 #include "dns/protocol.h"
 #include "dns/id.h"
 #include "server/daemon.h"
+#include <threads.h>
 static ms request_timeout = VALUE_DEFAULT_REQUEST_TIMEOUT*1000;
 static int max_retry_time = VALUE_DEFAULT_MAX_RETRY_TIME;
 #define DNS_RECV_BUF_SIZE 1024
@@ -205,8 +204,7 @@ int server_start() {
     if (linked_list_is_empty(upstreams))
         do_log(WARN,"server:upstream not configured");
     //todo 创建守护线程
-    Thread thread ;
-    thread_create(&thread,daemon_dnscache_ttl,NULL); //定时清理缓存
+     //定时清理缓存
     //初始化socket
     if (init_socket()) {
         do_log(ERROR,"server : socket init failed");

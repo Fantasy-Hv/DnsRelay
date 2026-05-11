@@ -9,16 +9,13 @@ add_executable(DnsRelay src/main.c
         include/dns/protocol.h
         include/dns/cache.h
         include/infra/config.h
-        include/infra/thread.h
         include/infra/socket.h
         include/server/server.h
         src/server/server.c
         src/infra/stl.c
         src/infra/logger.c
-        src/infra/linux/thread_posix.c
         src/infra/windows/sock_win.c
         src/infra/linux/sock_posix.c
-        src/infra/windows/thread_win.c
         include/infra/sys.h
         src/infra/linux/sys_linux.c
         src/infra/windows/sys_win.c
