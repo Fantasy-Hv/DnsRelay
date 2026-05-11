@@ -7,17 +7,40 @@
 #include <stdlib.h>
 #define DNS_REV_BUF_SIZE 1024
 /**
- *@brief 反序列化dns包，申请内存空间存储
- * @param raw_packet 原始dns包
- * @param size 包大小
- * @param dns_pack 解析后的dns包
- * @return 正常返回0，异常返回-1
- */
-int deserialize(char* raw_packet,int size, DnsPacket** dns_pack) {
+ *目前需要满足的两类需求：
+ 一、dns包的序列化和反序列化
+  1.序列化dns包
+ * header可以直接强转然后转换字节序
+ * question节需要根据header的qdcont循环解析
+    每个question解析行为是固定的，name字段自解码，qtype和qclass定长需要转换字节序
+  RR的解析：分别按照header中指定的数量来循环解析每条RR
+  rr的解析，前面ttl、type、class、datalength都是定长，需要转换字节序，
+  name需要解码，然后rdata直接copy就行了。
+  总的来说没有复杂的逻辑
+ *2.反序列化dns包
+    header需要转换字节序，然后copy
+    question需要循环列表，编码name,qtype、qclass转换字节序
+    rr一样，定长字段转换字节序，name编码，rdata直接copy
+ 二、dns包内容解析，本质上是要回答：如何从一个包构造另一个包，需要仔细研究协议规定的行为
 
-    return 0;
+    1.header中flags的解析，需要根据值采取相应的行为
+    2.question中内容的解析，
+ */
+/**
+ * 将人类可读的域名字符串编码为协议可用的字符串
+ * @return
+ */
+char* encode_name(const char*) {
+    return NULL;
 }
 
+/**
+ * 将dns包的域名字段解析为人类可读的字符串
+ * @return
+ */
+char* decode_name(const char*) {
+    return NULL;
+}
 
 
 /**
@@ -38,8 +61,8 @@ int pack_serialize(const DnsPacket* dns_pack,char* packet_buf) {
 int pack_deserialize(const char* raw_pack,int len,DnsPacket** packet) {
     return 0;
 }
+
 /**
- *
  * @param dns_pack 释放该dns包占用的内存
  */
 void pack_free(DnsPacket* dns_pack) {
@@ -100,7 +123,9 @@ int pack_make_relay(const DnsPacket * query_pack,uint16_t relay_id,DnsPacket** r
  * @param send 返回给客户端的响应
  * @param client_id 客户端查询请求的id
  */
-void pack_make_response_relay(const DnsPacket* recv,DnsPacket** send,uint16_t client_id){}
+void pack_make_response_relay(const DnsPacket* recv,DnsPacket** send,uint16_t client_id) {
+
+}
 
 /**
  * 生成服务器内部失败响应包

@@ -14,5 +14,9 @@ typedef struct {
 typedef int64_t ms;
 ms sys_time_ms(void);   // 跨平台返回单调毫秒时间戳
 Exception get_syscall_error(void); // 获取最后一次系统调用错误信息
-
+/**
+ * 获取系统hosts文件路径
+ * @return
+ */
+char* sys_hosts_path();
 #endif //DNSRELAY_PLATFORM_H

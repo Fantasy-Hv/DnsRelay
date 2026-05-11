@@ -1,13 +1,15 @@
 //
 // Created by yian on 2026/5/9.
 //
-//需要 线程同步——采用读写锁，读写互斥，读读不互斥写写互斥
+//需要线程安全的实现，使用<threads.h>
 #include "dns/cache.h"
 /**
  * 缓存初始化,保证可重入
  * @return
  */
 int dns_cache_init() {
+    // 1.读取主机hosts文件
+
     return 0;
 }
 

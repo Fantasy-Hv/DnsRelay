@@ -9,21 +9,40 @@
 #include "infra/socket.h"
 #include "dns/cache.h"
 #define MAX_PACKET_SIZE 512
-#define IS_QUERY(flags) ((flags >> 15)&1)
+//0=查询报文，1=响应报文
+#define IS_QUERY(flags) ((flags >> 15)^1)
+#define QR_SET(flags) (flags|=0x8000)
 
-#define OPCODE(flags) ((flags >> 12)&0xf)
+typedef enum {
+    QUERY, // 标准查询请求
+    IQUERY, // 反向查询请求，已弃用，收到此类型包应返回NOTIMP
+    STATUS, // 服务器状态查询请求
+}OpCode;
+#define OPCODE_GET(flags) ((flags >> 12)&0xf)
 
-#define AA(flags) ((flags >> 10)&1)
-
-#define TC(flags) ((flags >> 9)&1)
-
-#define RD(flags) ((flags >> 8)&1)
-
-#define RA(flags) ((flags >> 7)&1)
-
-#define Z(flags) ((flags >> 4)&0x7)
-
+#define AA_GET(flags) ((flags >> 10)&1)
+#define AA_SET(flags) (flags|= 0x0400)
+#define TC_GET(flags) ((flags >> 9)&1)
+#define TC_SET(flags) (flags|=0x0200)
+#define RD_GET(flags) ((flags >> 8)&1)
+#define RD_SET(flags) (flags|=0x0100)
+#define RA_GET(flags) ((flags >> 7)&1)
+#define RA_SET(flags) (flags |=0x0080)
+#define Z_GET(flags) ((flags >> 4)&0x7)
+#define Z_SET(flags) (flags|=0x0070)
+/**
+ * 响应状态码字段值
+ */
+typedef enum {
+    RCODE_NOERROR, //成功
+    RCODE_FORMERR,//格式错误
+    RCODE_SERVFAIL,//服务器失败
+    RCODE_NXDOMAIN,//域名不存在
+    RCODE_NOTIMP,//查询类型不支持
+    RCODE_REFUSED//拒绝响应
+}Rcode;
 #define RCODE(flags) ((flags)&0xf)
+
 typedef enum {
     UPSTREAM,CLIENT
 }PacketDirection;
@@ -42,25 +61,45 @@ typedef struct  {
     uint16_t additional_RRs;
 } SectionHeader;
 
+/**
+ * question 节
+ */
 typedef struct {
     char* qname; //不定长字节自解码字段
-    uint16_t qtype;
+    uint16_t qtype; // 查询类型
     uint16_t qclass;
-}SectionQuestion; //要查询的域名信息
-
+}SectionQuestion;
+//下面两类值在question和RR中都有使用
+typedef enum { // 不要随意更改顺序
+    QTYPE_A = 1, // IPv4 地址
+    QTYPE_NS, //权威名称服务器
+    QTYPE_CNAME = 5, //域名的规范名称
+    QTYPE_SOA,//授权区域起始
+    QTYPE_NULL=9,//空资源记录 (实验性)
+    QTYPE_WKS,//知名服务描述
+    QTYPE_PTR,//域名指针 (用于反向解析)
+    QTYPE_HINFO,//主机信息 (CPU和操作系统)
+    QTYPE_MINFO,//邮箱或邮件列表信息
+    QTYPE_MX,
+    QTYPE_TXT,//文本字符串
+    QTYPE_AAAA = 28, // ipv6
+}Qtype;
+typedef enum {
+    QCLASS_IN=1 // 互联网地址类
+}Class;
 typedef struct {
     uint32_t ttl;
     uint16_t type;
     uint16_t class;
-    uint16_t rdata_length;
-    char* name;//域名
+    uint16_t rdata_length; //rdata长度，以字节为单位
+    char* name;//域名，人类可读形式
     char* rdata;
 } ResourceRecord;
 
 typedef struct {
     SectionHeader header;
+    LinkedList*  questions; // T = SessionQuestion*
     //这些可能有多条，数量由header给出,列表元素类型T = ResourceRecord*
-    LinkedList*  questions;
     LinkedList*  answer_RRs;
     LinkedList* authority_RRs;
     LinkedList* additional_RRs;
