@@ -22,7 +22,7 @@
  * 现在可以回答此前的问题了：id的状态转移由server决定，id的状态记录由本层决定，而session层持有id的拷贝。
     id的申请释放时机由调用者决定，本层只需要维护id状态即可。
 */
-uint16_t id_alloc();
+int id_alloc(uint16_t *);
 void id_free(uint16_t id);
 #endif //DNSRELAY_ID_H
 

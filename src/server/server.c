@@ -124,49 +124,50 @@ static void batch_timeout() {
 
 /**
  * 处理收到的dns包
- * @param packet_in 收到的dns包
- * @param source_end 包的来源
+ * @param packet_in
+ * @param source_end
+ * packet包内存管理 ：1.如果本地回复，会被free。2.如果请求转发，由retry_cache持有,超时处理逻辑管理
+ * 3.如果是响应包，会被free.
  * @return
  */
-static int handle_dns_packet(const DnsPacket*packet_in,NetEnd source_end) {
+static int handle_dns_packet( DnsPacket*packet_in,NetEnd source_end) {
     DnsPacket* packet_out ;
     if (packet_is_query(packet_in)) { //请求包
-        PacketDirection direction = pack_make_local_answer(packet_in,&packet_out);
+        PacketDirection direction = pack_answer_locally(packet_in,&packet_out);
         if (direction==CLIENT) { //本地可以直接响应
             packet_send(packet_out,&source_end);
-             pack_free(packet_out);
+            pack_free(packet_out);
         } // 需要转发
         else if (!linked_list_is_empty(upstreams)) {
-            //申请id
+            //构造中继包，申请id
             uint16_t relay_id;
-            if (id_alloc(&relay_id)) {
-                //id 不足 ,返回失败响应
-                do_log(WARN,"server:id alloc failed");
-                pack_make_inner_error(packet_in,&packet_out);
-                packet_send(packet_out,&source_end);
-                pack_free(packet_out);
-            } else {
-                pack_make_relay(packet_in,relay_id,&packet_out);
-                //发送中继包
-                packet_send(packet_out, pick_upstream());
-                // 开启会话，将该包存储在会话中
-                session_open(packet_in->header.id,source_end,packet_out);
+            if (!id_alloc(&relay_id)) {
+                do_log(ERROR, "server : relay id exhausted");
+                return -1;
             }
+            packe_cook_relay(packet_in, relay_id, &packet_out);
+            //发送中继包
+            packet_send(packet_out, pick_upstream());
+            // 开启会话，将该包存储在会话中
+            session_open(packet_in->header.id,source_end,packet_out);
         }
-        else do_log(WARN,"server : no upstream found ");
+        else do_log(ERROR,"server : no upstream server ");
 
     }else { // 响应包
         //获取对应session
         Session * session = session_get(packet_in->header.id);
         if (session) { //发送给客户端
-            pack_make_response_relay(packet_in,&packet_out,session->client_id);
+            pack_cook_response(packet_in,&packet_out,session->client_id);
             packet_send(packet_out,&session->client_ip);
             //结束会话
             session_close(session);
-            // 回收id
             id_free(packet_in->header.id);
+            pack_free(packet_in);
+        } else {
+            //丢弃包
+            do_log(DEBUG,"server : no session match rsp, drop pack");
+            pack_free(packet_in);
         }
-        else do_log(WARN,"server : no session match rsp, drop pack");
     }
     return 0;
 }
@@ -182,12 +183,11 @@ static void server_loop() {
         else get_session_timeout_remain(earliest_session,request_timeout,&next_timeout);
 
         const int stat = socket_sleep_on(&socket_holder,1,next_timeout);
+
         if (stat>=0) { // 收取dns数据包
             DnsPacket * packet ;NetEnd source_end;
-            while (!pack_recv(&packet,&source_end)) {
-                handle_dns_packet(packet,source_end);
-                pack_free(packet);
-            }
+            while (!pack_recv(&packet,&source_end))
+                    handle_dns_packet(packet,source_end);
             batch_timeout();
         }
         // 错误
@@ -207,7 +207,7 @@ int server_start() {
     config_get(KEY_UPSTREAMS,upstreams);
     if (linked_list_is_empty(upstreams))
         do_log(WARN,"server:upstream not configured");
-    //创建守护线程
+    //todo 创建守护线程
     Thread thread ;
     thread_create(&thread,daemon_dnscache_ttl,NULL); //定时清理缓存
     //初始化socket
@@ -222,5 +222,4 @@ int server_start() {
 
     return 0;
 }
-
 
