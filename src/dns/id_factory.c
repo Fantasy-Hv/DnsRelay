@@ -6,16 +6,15 @@
 
 static uint16_t ids[65536];
 static int top;
-static int initialized;
 static int st[65536];
 
-static void id_pool_init() {
+int id_pool_init() {
     top = 65535;
     for (int i = 0; i < 65536; i++) {
         ids[i] = (uint16_t) i;
     }
     memset(st, 0, sizeof(st));
-    initialized = 1;
+    return 0;
 }
 
 int id_alloc(uint16_t* id) {
@@ -23,9 +22,6 @@ int id_alloc(uint16_t* id) {
         return 1;
     }
 
-    if (!initialized) {
-        id_pool_init();
-    }
 
     if (top < 0) {
         return 1;

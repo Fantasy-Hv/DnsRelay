@@ -21,22 +21,22 @@ typedef struct {
 /**
  * 初始化会话存储，不要重复调用
  */
-void session_factory_init();
+int session_factory_init();
 /**
- * 根据代理id获取会话
- * @param relay_id
+ * 根据返回的dns响应包获取对应会话
+ * @param relay_response
  * @return
  */
-Session * session_get(uint16_t relay_id);
+Session * session_get(const DnsPacket* relay_response);
 
 /**
  * 为客户端id开启一个会话，并添加到等待队列
  * @param client_id 客户端请求的id
- * @param relay_pack 缓存的中继包
  * @param client_ip 客户端位置
+ * @param relay_pack 缓存的中继包
  * @return
  */
-int session_open(uint16_t client_id,NetEnd client_ip,DnsPacket * relay_pack);
+int session_open(uint16_t client_id,NetEnd client_ip,const DnsPacket * relay_pack);
 
 /**
  * 关闭会话

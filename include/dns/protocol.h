@@ -15,7 +15,7 @@
 
 typedef enum {
     QUERY, // 标准查询请求
-    IQUERY, // 反向查询请求，RFC3425宣布弃用，但是课程要求支持 :(
+    IQUERY, // 反向查询请求，RFC3425宣布弃用，实际中反向查询使用标准查询+特殊域名的方式表达
     STATUS, // 服务器状态查询请求
 }OpCode;
 #define OPCODE_GET(flags) ((flags >> 12)&0xf)
@@ -31,7 +31,7 @@ typedef enum {
 #define Z_GET(flags) ((flags >> 4)&0x7)
 #define Z_SET(flags) (flags|=0x0070)
 /**
- * 响应状态码字段值
+ * 响应状态码字段值，不要改字段顺序！
  */
 typedef enum {
     RCODE_NOERROR, //成功
@@ -47,7 +47,7 @@ typedef enum {
     UPSTREAM,CLIENT
 }PacketDirection;
 
-
+// 所有结构体中的name字段都是标准域名编码，
 /**
  * DNS协议的header节
  *
@@ -65,6 +65,9 @@ typedef struct  {
  * question 节
  */
 typedef struct {
+    /**
+     * 如果以in-addr.arpa 结尾，表明这是一个反向查询
+     */
     char* qname; ////域名，dns域名编码，不定长字节自解码字段
     uint16_t qtype; // 查询类型
     uint16_t qclass;
@@ -87,33 +90,49 @@ typedef enum { // 不要随意更改顺序
 typedef enum {
     QCLASS_IN=1 // 互联网地址类
 }Class;
-
 /**
  * Rdata格式
- *  class   type   rdata
+ *  class   type   rdata                                name
  *  IN      A       大端序4字节ipv4地址
  *  IN      AA      大端序16字节ipv6地址
  *  IN    CNAME     name的标准名称，dns域名编码
  *  IN    NS        该区域的权威服务器域名，dns域名编码
+ *  IN    PTR       用于反向dns解析查询 ，此时name为ip地址，有特殊编码规则，对于PTR记录的query,同样只需要
  *  IN    SOA       较为复杂。。。
+
  */
 typedef struct {
-    SectionHeader header; //控制信息
-    LinkedList*  questions; // T = SessionQuestion*
-    //这些可能有多条，数量由header给出,下面三个段的列表元素类型T = ResourceRecord*
-    LinkedList*  answers; // 对question的回答
-    LinkedList* authorites; // 权威域名服务器的域名
-    LinkedList* additionals; // 权威域名服务器的ip
-} DnsPacket;
-
-typedef struct {
-    uint32_t ttl; // 缓存过期时间，s
+    char* name; //该记录对应question中的哪个域名，dns域名编码，是字符串(\0)
     uint16_t type; //可用值为Qtype的子集
     uint16_t class; // 为IN
+    uint32_t ttl; // 缓存过期时间，s
     uint16_t rdata_length; //rdata长度，以字节为单位
-    char* name; //该记录对应question中的哪个域名，dns域名编码，
     char* rdata;
 } ResourceRecord;
+
+
+typedef struct {
+    SectionHeader header; //控制信息+后续段数量
+    Vector*  questions; // T = SessionQuestion*
+    //下面三个段的列表元素类型T = ResourceRecord*
+    /**
+     * 对question的直接回答
+     */
+    Vector*  answers;
+    /**
+     * 这个段用来提供权威服务器的信息
+      type  rdata
+      NS 当服务器不是查询域的权威，但知道权威服务器是时（即“引用应答”或“委派”），会在 Authority 段返回对应的 NS 记录
+     */
+    Vector* authorites;
+    /**
+     * 此段提供辅助数据
+     * type     rdata
+       A/AAAA   auth段中NS记录的权威服务器的ip
+       OPT     用于扩展 DNS 协议，客户端和服务器用它来协商更大的 UDP 包尺寸
+     */
+    Vector* additionals; // 权威域名服务器的ip
+} DnsPacket;
 
 
 /**
@@ -129,18 +148,16 @@ void pack_free(DnsPacket* dns_pack);
 DnsPacket* pack_create();
 
 /**
- * 包的比较函数，主要用于判等,仅比较header id.已弃用
- * @param packet1
- * @param packet2
+ * 复制dns包
  * @return
  */
-int packet_equals(T packet1, T packet2) ;
+DnsPacket* packet_clone(const DnsPacket* source);
 /**
  * 将数据包转为字符串方便日志格式化输出，结尾带\0
  * @param dns_pack dns包
  * @return 字符串地址
  */
-char* to_log_string_packet(const DnsPacket* dns_pack);
+char* packet_to_log_string(const DnsPacket* dns_pack);
 
 /**
  * 包是否为请求包
@@ -179,7 +196,7 @@ void pack_make_response_relay(const DnsPacket* recv,DnsPacket** send,uint16_t cl
  * @brief 将网络字节流反序列化为dns包
  * @param raw_pack 网络字节流
  * @param packet
- * @return
+ * @return 0-解析成功，-1解析失败
  */
 int pack_deserialize(const char* raw_pack,int len,DnsPacket** packet) ;
 
@@ -190,11 +207,13 @@ int pack_deserialize(const char* raw_pack,int len,DnsPacket** packet) ;
  * @param packet_buf 序列化缓冲区，必须预先分配足够的内存！
  * @return 序列化后的dns包大小，异常返回-1
  */
-int pack_serialize(const DnsPacket* dns_pack,char* packet_buf);
+int pack_serialize(const DnsPacket* dns_pack,char*  packet_buf);
 
 /**
  * 生成服务器内部错误响应包
  *
  */
 void pack_make_inner_error(const DnsPacket* query,DnsPacket ** answer ) ;
+
+
 #endif //DNSRELAY_PROTOCOL_H

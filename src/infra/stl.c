@@ -5,7 +5,11 @@
 
 #include <stddef.h>
 
-
+/**
+ *
+ * @param init_capacity
+ * @return
+ */
 Vector* vector_create(int init_capacity) {
 
 }
@@ -29,7 +33,7 @@ void vector_remove(Vector *vector,int index) {
 
 }
 
-T vector_get(Vector* vector,int index) {
+T vector_get(const Vector* vector,int index) {
 
 }
 
@@ -38,7 +42,7 @@ T vector_get(Vector* vector,int index) {
  * @param vector
  * @return
  */
-int vector_size(Vector* vector) {
+int vector_size(const Vector* vector) {
 
 }
 
@@ -117,10 +121,10 @@ HashMap * hash_map_create(HashFunction hash_function,Comparator comparator) {
 void hash_map_free(HashMap* map) {}
 
 
-void hash_map_put(HashMap* map,K key,T data) {
+void hash_map_put(HashMap* map, K key,T data) {
 
 }
-int hash_map_get(HashMap* map,K key,T* result) {
+int hash_map_get(const HashMap* map,K key,T* result) {
     return 0;
 }
 void hash_map_remove(HashMap* map,K key) {
