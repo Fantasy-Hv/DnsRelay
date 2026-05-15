@@ -72,6 +72,7 @@ int vector_size(Vector* vector);
 //--------------链表-----------------
 typedef struct LinkNode{
     T data;
+    struct LinkNode* prev;
     struct LinkNode* next;
 }LinkedNode;
 typedef struct LinkedList {
@@ -88,10 +89,11 @@ void linked_list_clear(LinkedList*list);
 int linked_list_is_empty(LinkedList* list);
 /**
  * 删除元素
+ * @param list 链表
  * @param data 元素
  * @param comparator 元素比较函数
  */
-void linked_list_remove(T data,Comparator comparator);
+void linked_list_remove(LinkedList* list,T data,Comparator comparator);
 
 
 //-------------优先队列--------------------

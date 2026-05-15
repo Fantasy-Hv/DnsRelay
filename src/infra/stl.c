@@ -156,16 +156,68 @@ void vector_free(Vector* vector) {
 }
 
 //---------------------------------------
+static LinkedNode *linked_node_create(T data) {
+    LinkedNode *node = malloc(sizeof(LinkedNode));
+    if (node == NULL) {
+        return NULL;
+    }
+    node->data = data;
+    node->prev = NULL;
+    node->next = NULL;
+    return node;
+}
+
 LinkedList* linked_list_create() {
-    return NULL;
+    LinkedList *list = malloc(sizeof(LinkedList));
+    if (list == NULL) {
+        return NULL;
+    }
+    list->head = NULL;
+    list->tail = NULL;
+    list->size = 0;
+    return list;
 }
 
 void linked_list_addFirst(LinkedList* list,T data) {
+    if (list == NULL) {
+        return;
+    }
 
+    LinkedNode *node = linked_node_create(data);
+    if (node == NULL) {
+        return;
+    }
+
+    node->next = list->head;
+    if (list->head != NULL) {
+        list->head->prev = node;
+    } else {
+        list->tail = node;
+    }
+
+    list->head = node;
+    list->size++;
 }
 
 void linked_list_addLast(LinkedList* list,T data) {
+    if (list == NULL) {
+        return;
+    }
 
+    LinkedNode *node = linked_node_create(data);
+    if (node == NULL) {
+        return;
+    }
+
+    node->prev = list->tail;
+    if (list->tail != NULL) {
+        list->tail->next = node;
+    } else {
+        list->head = node;
+    }
+
+    list->tail = node;
+    list->size++;
 }
 
 /**
@@ -173,19 +225,61 @@ void linked_list_addLast(LinkedList* list,T data) {
  * @param data 元素
  * @param comparator 元素比较函数
  */
-void linked_list_remove(T data,Comparator comparator) {
+void linked_list_remove(LinkedList* list,T data,Comparator comparator) {
+    if (list == NULL || comparator == NULL) {
+        return;
+    }
+
+    LinkedNode *node = list->head;
+    while (node != NULL) {
+        LinkedNode *next = node->next;
+        if (comparator(node->data, data) == 0) {
+            if (node->prev != NULL) {
+                node->prev->next = node->next;
+            } else {
+                list->head = node->next;
+            }
+
+            if (node->next != NULL) {
+                node->next->prev = node->prev;
+            } else {
+                list->tail = node->prev;
+            }
+
+            free(node);
+            list->size--;
+        }
+        node = next;
+    }
 }
 
 int linked_list_is_empty(LinkedList* list) {
-    return 0;
+    return list == NULL || list->size == 0;
 }
 
 void linked_list_clear(LinkedList*list) {
+    if (list == NULL) {
+        return;
+    }
 
+    LinkedNode *node = list->head;
+    while (node != NULL) {
+        LinkedNode *next = node->next;
+        free(node);
+        node = next;
+    }
+
+    list->head = NULL;
+    list->tail = NULL;
+    list->size = 0;
 }
 
 void linked_list_free(LinkedList* list) {
-
+    if (list == NULL) {
+        return;
+    }
+    linked_list_clear(list);
+    free(list);
 }
 
 //-------------------------------
