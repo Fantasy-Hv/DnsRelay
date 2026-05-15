@@ -24,8 +24,8 @@ typedef union {
     uint8_t ipv6[16];
 }in_addr;
 typedef struct {
-    IpVersion version;
     in_addr addr;
+    IpVersion version;
     int port;
 }NetEnd;
 // socket句柄/描述符

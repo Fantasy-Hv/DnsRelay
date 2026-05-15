@@ -2,6 +2,7 @@
 // Created by yian on 2026/5/9.
 //
 #include <stdlib.h>
+#include <string.h>
 
 #include "server/session.h"
 #include "infra/stl.h"
@@ -34,28 +35,25 @@ static int session_comparator(void* a, void* b) {
 }
 
 
-void session_factory_init() {
+int session_factory_init() {
     sessions_queue = priority_queue_create(session_comparator);
-    agent_id_sessions = hash_map_create(hash_uint16_t,session_comparator);
-
+    agent_id_sessions = hash_map_create(hash_func_uint16,session_comparator);
+    return !sessions_queue || !agent_id_sessions;
 }
 
 
 
-/**
- * 根据中继id获取会话
- * @param relay_id 中继id
- * @return
- */
-Session * session_get(uint16_t relay_id) {
+
+Session * session_get(const DnsPacket* relay_response) {
+    if (!relay_response)return NULL;
+    uint16_t id = relay_response->header.id;
     T ses ;
-    hash_map_get(agent_id_sessions,&relay_id,&ses);
+    hash_map_get(agent_id_sessions,&id,&ses);
     return ses;
 }
 
 /**
- * 将逻辑会话记录从系统中彻底删除
- * 包括：会话队列、会话映射和会话本身,以及会话使用的dns包缓存
+ * 关闭中继请求的会话
  * @param session
  */
  void session_close(Session *session) {
@@ -67,8 +65,8 @@ Session * session_get(uint16_t relay_id) {
     free(session);
 }
 
-/**fixme
- * 获取会话的超时剩余时间
+/**
+ * 会话的超时剩余时间
  * @param session not null
  * @param timeval 剩余时间
  * @return 0正常，-1表示异常，返回的timeval值无效
@@ -114,13 +112,13 @@ int session_wait(Session *session){
  * @param relay_pack
  * @return
  */
-int session_open(uint16_t client_id,NetEnd client_ip,DnsPacket * relay_pack) {
+int session_open(uint16_t client_id,NetEnd client_ip,const DnsPacket * relay_pack) {
     Session* session = malloc(sizeof(Session));
     session->client_id = client_id;
     session->client_ip = client_ip;
     session->relay_info.retry_times = 0;
-    session->relay_info.relay_packet = relay_pack;
-    hash_map_put(agent_id_sessions,&relay_pack->header.id,session);
+    session->relay_info.relay_packet = packet_clone(relay_pack);
+    hash_map_put(agent_id_sessions,&session->relay_info.relay_packet->header.id,session);
     session_wait(session);
     return 0;
 }
