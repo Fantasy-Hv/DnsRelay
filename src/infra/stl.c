@@ -4,17 +4,89 @@
 # include  "infra/stl.h"
 
 #include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
+
+/**
+ * Vector 实现建议：
+ * 1. 维护三个状态：elements / size / capacity
+ * 2. 保持不变量：0 <= size <= capacity
+ * 3. 有效元素区间永远是 [0, size)
+ *
+ * 常用库函数提示：
+ * - malloc/calloc: 初始分配结构体和底层数组
+ * - realloc: 扩容底层数组
+ * - memmove: 插入、删除时搬移元素，允许源和目标重叠
+ * - free: 释放数组和结构体本身
+ */
+static int vector_grow(Vector *vector, int min_capacity) {
+    if (vector == NULL) {
+        return 0;
+    }
+
+    if (min_capacity <= vector->capacity) {
+        return 1;
+    }
+    
+    int temp_capacity = vector->capacity;
+    if (vector->capacity <= 0) {
+        temp_capacity = 1;
+    }
+
+    while (min_capacity > temp_capacity) {
+        temp_capacity <<= 1;
+    }
+
+    T * temp_elements = realloc(vector->elements,sizeof(T) * temp_capacity);
+    if (temp_elements == NULL) {
+        return 0;
+    }
+
+    vector->elements = temp_elements;
+    vector->capacity = temp_capacity;
+    return 1;
+}
 
 
 Vector* vector_create(int init_capacity) {
+    if (init_capacity <= 0) {
+        init_capacity = 1;
+    }
 
+    Vector* vector = malloc(sizeof(Vector));
+    if (vector == NULL) {
+        return NULL;
+    }
+
+    vector->elements = malloc(sizeof(T) * init_capacity);
+    if (vector->elements == NULL) {
+        free(vector);
+        return NULL;
+    }
+
+    vector->capacity = init_capacity;
+    vector->size = 0;
+    return vector;
 }
+
 /**
  * 追加元素，如果超过容量，要扩容
  * @param vector
  * @param element
  */
-void vector_add(Vector* vector,T element) {}
+void vector_add(Vector* vector,T element) {
+
+    if (vector == NULL) {
+        return;
+    }
+
+    if (!vector_grow(vector, vector->size + 1)) {
+        return;
+    }
+
+    vector->elements[vector->size] = element;
+    vector->size++;
+}
 /**
  * 在指定位置插入元素，如果超过容量,要扩容。
  *
@@ -23,14 +95,41 @@ void vector_add(Vector* vector,T element) {}
  * @param index
  */
 void vector_insert(Vector* vector,T element,int index) {
+    if (vector == NULL || index < 0 || index > vector->size) {
+        return;
+    }
 
+    if(! vector_grow(vector,vector->size + 1)) {
+        return;
+    }
+
+    for(int i = vector->size - 1;i >= index;i --) {
+        vector->elements[i + 1] = vector->elements[i];
+    }
+
+    vector->elements[index] = element;
+    vector->size ++;
 }
+
 void vector_remove(Vector *vector,int index) {
 
+    if (vector == NULL || index >= vector->size || index < 0) {
+        return;
+    }
+
+    memmove(vector->elements + index,vector->elements + index + 1,sizeof(T) * (vector->size - index - 1) );
+
+    vector->size --;
 }
 
 T vector_get(Vector* vector,int index) {
 
+
+    if (vector == NULL || index >= vector->size || index < 0) {
+        return NULL;
+    }
+
+    return vector->elements[index];
 }
 
 /**
@@ -40,10 +139,20 @@ T vector_get(Vector* vector,int index) {
  */
 int vector_size(Vector* vector) {
 
+    if (vector == NULL ) {
+        return 0;
+    }
+
+    return vector->size;
 }
 
 void vector_free(Vector* vector) {
 
+    if (vector == NULL) {
+        return;
+    }
+    free(vector->elements);
+    free(vector);
 }
 
 //---------------------------------------

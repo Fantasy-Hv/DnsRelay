@@ -19,6 +19,7 @@ static  int hash_uint16_t(K key) {
 //----------------向量--------------
 typedef struct Vector {
     T* elements; //元素列表
+    int size; //当前元素个数
     int capacity;
 }Vector;
 
@@ -40,9 +41,22 @@ void vector_add(Vector* vector,T element);
  * @param index
  */
 void vector_insert(Vector* vector,T element,int index);
+
+
+
 void vector_remove(Vector *vector,int index);
+
+
+
+
 void vector_free(Vector* vector);
+
+
+
+
 T vector_get(Vector* vector,int index);
+
+
 
 /**
  * 返回向量中元素数量
@@ -50,6 +64,11 @@ T vector_get(Vector* vector,int index);
  * @return
  */
 int vector_size(Vector* vector);
+
+
+
+
+
 //--------------链表-----------------
 typedef struct LinkNode{
     T data;
@@ -73,6 +92,8 @@ int linked_list_is_empty(LinkedList* list);
  * @param comparator 元素比较函数
  */
 void linked_list_remove(T data,Comparator comparator);
+
+
 //-------------优先队列--------------------
 
 
@@ -126,6 +147,9 @@ T priority_queue_peek(PriorityQueue* queue);
  * @param data
  */
 void priority_remove(PriorityQueue* queue,T data);
+
+
+
 //-------------哈希表-------------
 typedef struct {
     Vector* buckets; // 向量的每个元素都是一个链表,链表的元素类型为数据类型T。可以用linklist,也可以用LinkNode
