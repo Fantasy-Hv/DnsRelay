@@ -435,8 +435,12 @@ int packet_is_query(const DnsPacket *packet) {
 static int make_response_status(const DnsPacket *query, DnsPacket **response) {
     return 0;
 }
-static  int setRcode(DnsPacket* pack,OpCode) {
-
+static  int setRcode(DnsPacket* pack,Rcode rcode) {
+    if (!pack)return -1;
+    // 16 位，设置低4位，
+    pack->header.flags &= 0xfff0; // 全部清零
+    pack->header.flags |= 0x000f&rcode; //  直接覆盖
+    return 0;
 }
 /**
  * 构造空响应，用于标准查询下RD=0且没有缓存的情况。
@@ -447,8 +451,8 @@ static int make_response_empty(const DnsPacket *query, DnsPacket **empty_respons
     response->header.answer_RRs = 0;
     response->header.additional_RRs = 0;
     response->header.authority_RRs = 0;
-    // AA_SET(response->header.flags);
-
+    setRcode(*empty_response,RCODE_NOERROR);
+    RA_SET(response->header.flags);
     *empty_response = response;
     return 0;
 }
@@ -461,6 +465,7 @@ static int make_response_empty(const DnsPacket *query, DnsPacket **empty_respons
  * @return
  */
 static int make_response_fail(const DnsPacket *query, DnsPacket **fail, Rcode rcode) {
+
     return 0;
 }
 

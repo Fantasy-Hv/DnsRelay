@@ -12,6 +12,7 @@
 
 static  LogLevel logging_level = INFO; //日志过滤级别
 static FILE* output_channels[4] ; // 各级别的输出流
+// todo
 void* log_config_parser(const char* key,const char* value) {
     return NULL;
 }
