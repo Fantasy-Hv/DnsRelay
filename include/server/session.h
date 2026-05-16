@@ -6,6 +6,9 @@
 #include "dns/protocol.h"
 #include <stdint.h>
 
+#include "infra/socket.h"
+#include "infra/sys.h"
+
 
 typedef struct {
     ms timestamp; //上一次请求转发时的时间戳，如果请求不需要转发，为0.

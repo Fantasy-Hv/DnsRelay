@@ -4,9 +4,8 @@
 
 #ifndef DNSRELAY_CACHE_H
 #define DNSRELAY_CACHE_H
-#include "infra/socket.h"
 #include "infra/stl.h"
-#include "protocol.h"
+#include "dns/protocol.h"
 // dns缓存全局单例，上层可直接从本接口读写缓存数据，需要线程安全的实现。
 //这里也是整个系统主要占用内存的部分，另一个是session
 /**todo

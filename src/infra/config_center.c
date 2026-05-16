@@ -45,7 +45,7 @@ int simp_compare(T value1,T value2) {
 
 ConfigSection* create_section(const char* section) {
     ConfigSection* sec = malloc(sizeof(ConfigSection));
-    sec->key_values = hash_map_create(hash_func_str,simp_compare);
+    sec->key_values = hash_map_create(hash_str,simp_compare);
     return sec;
 }
 
@@ -55,8 +55,8 @@ void config_register_parser(const char* section,ConfigParser parser) {
 }
 
 int config_init() {
-    config_parsers = hash_map_create(hash_func_str,simp_compare);
-    configs = hash_map_create(hash_func_str,simp_compare);
+    config_parsers = hash_map_create(hash_str,simp_compare);
+    configs = hash_map_create(hash_str,simp_compare);
     return !(configs&&config_parsers);
 }
 int config_get(const char* section,const char *key,void* value) {

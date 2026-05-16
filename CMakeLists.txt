@@ -3,7 +3,7 @@ project(DnsRelay C)
 
 set(CMAKE_C_STANDARD 23)
 find_package(Threads REQUIRED)
-add_executable(DnsRelay src/main.c
+add_executable(DnsRelay
         include/infra/stl.h
         include/infra/logger.h
         include/dns/protocol.h
@@ -11,6 +11,7 @@ add_executable(DnsRelay src/main.c
         include/infra/config.h
         include/infra/socket.h
         include/server/server.h
+        src/main.c
         src/server/server.c
         src/infra/stl.c
         src/infra/logger.c

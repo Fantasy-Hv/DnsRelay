@@ -6,8 +6,6 @@
 #define DNSRELAY_PROTOCOL_H
 #include "infra/stl.h"
 #include <stdint.h>
-#include "infra/socket.h"
-#include "dns/cache.h"
 #define MAX_PACKET_SIZE 512
 //0=查询报文，1=响应报文
 #define IS_QUERY(flags) ((flags >> 15)^1)

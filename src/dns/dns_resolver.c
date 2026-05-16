@@ -11,6 +11,7 @@
 #include <netinet/in.h>
 
 #include "infra/logger.h"
+#include "infra/sys.h"
 #define DNS_REV_BUF_SIZE 1024
 /**
  *目前需要满足的两类需求：
@@ -129,7 +130,7 @@ DnsPacket *pack_create() {
  * @param RRS
  * @return
  */
-static Vector *rrs_clone(const Vector *RRS) {
+static Vector *rrs_clone(Vector *RRS) {
     Vector *clony = vector_create(vector_size(RRS));
     for (int i = 0; i < vector_size(RRS); i++) {
         const ResourceRecord *src = vector_get(RRS, i);
@@ -206,7 +207,7 @@ static int question_serialize(const SectionQuestion* const question, char* cur_p
  * @param cur_p
  * @return
  */
-static int segment_question_serialize( const Vector * const segment,int qc, char* const cur_p) {
+static int segment_question_serialize( Vector * const segment,int qc, char* const cur_p) {
     char * cursor = cur_p;
     for (int i=0;i<qc;i++) {
         cursor += question_serialize(vector_get(segment,i),cursor);
@@ -349,7 +350,7 @@ static int rr_serialize( char *start_p,  char *cur_p,const ResourceRecord * cons
  * @param cnt rr数量
  * @return
  */
-static int segment_rr_serialize(const Vector * const segment,int cnt,char *start_p,  char *cur_p) {
+static int segment_rr_serialize(Vector * const segment,int cnt,char *start_p,  char *cur_p) {
      char * cursor = cur_p;
     for (int i = 0;i<cnt;i++) {
         cursor += rr_serialize(start_p,cursor,vector_get(segment,i));

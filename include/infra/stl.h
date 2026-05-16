@@ -16,6 +16,10 @@ typedef int (*HashFunction)( K key); //计算元素的哈希值
 static  int hash_uint16_t(K key) {
     return *(uint16_t*)key;
 }
+// 字符串哈希函数
+static int hash_str(K key) {
+    return 0;
+}
 //----------------向量--------------
 typedef struct Vector {
     T* elements; //元素列表

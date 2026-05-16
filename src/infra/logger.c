@@ -9,7 +9,7 @@
 
 #include "infra/config.h"
 #include "infra/sys.h"
-
+static char* LEVEL_STR[4]={"DEBUG","INFO","WARN","ERROR"};
 static  LogLevel logging_level = INFO; //日志过滤级别
 static FILE* output_channels[4] ; // 各级别的输出流
 // todo

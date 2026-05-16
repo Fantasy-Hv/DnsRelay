@@ -76,26 +76,23 @@ static void swap_16(const uint8_t src[16], uint8_t dst[16]) {
 
 // ==================== 公开API：主机序 -> 网络序 ====================
 
-uint16_t host_to_net_2(uint16_t host) {
+void host_to_net_2(uint16_t* host) {
     // 只有小端序机器才需要转换
     if (is_little_endian()) {
-        return swap_2(host);
+        *host = swap_2(*host);
     }
-    return host; // 大端序机器不需要转换
 }
 
-uint32_t host_to_net_4(uint32_t host) {
+void host_to_net_4(uint32_t* host) {
     if (is_little_endian()) {
-        return swap_4(host);
+        *host = swap_4(*host);
     }
-    return host;
 }
 
-uint64_t host_to_net_8(uint64_t host) {
+void host_to_net_8(uint64_t* host) {
     if (is_little_endian()) {
-        return swap_8(host);
+        *host =  swap_8(*host);
     }
-    return host;
 }
 
 void host_to_net_16(const uint8_t host[16], uint8_t net[16]) {
@@ -116,21 +113,19 @@ void host_to_net_16(const uint8_t host[16], uint8_t net[16]) {
 void net_to_host_2(uint16_t *net) {
     // 网络序是大端序，如果机器是小端序则需要转换
     if (is_little_endian())
-         *net =  swap_2(net);
+         *net =  swap_2(*net);
 }
 
-uint32_t net_to_host_4(uint32_t net) {
+void net_to_host_4(uint32_t* net) {
     if (is_little_endian()) {
-        return swap_4(net);
+        *net = swap_4(*net);
     }
-    return net;
 }
 
-uint64_t net_to_host_8(uint64_t net) {
+void net_to_host_8(uint64_t* net) {
     if (is_little_endian()) {
-        return swap_8(net);
+        *net = swap_8(*net);
     }
-    return net;
 }
 
 void net_to_host_16(const uint8_t net[16], uint8_t host[16]) {
