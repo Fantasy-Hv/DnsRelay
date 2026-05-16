@@ -10,6 +10,9 @@
 int64_t sys_time_ms(void) {
     return 0;
 }
+char* sys_datetime_now() {
+    return NULL;
+}
 //todo
 Exception get_syscall_error(void) {
     return (Exception){errno,""};

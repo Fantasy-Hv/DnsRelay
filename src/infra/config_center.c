@@ -42,7 +42,7 @@ Entry* create_entry(const char* key,T value) {
 int simp_compare(T value1,T value2) {
     return value1==value2;
 }
-
+//fixme
 ConfigSection* create_section(const char* section) {
     ConfigSection* sec = malloc(sizeof(ConfigSection));
     sec->key_values = hash_map_create(hash_str,simp_compare);
@@ -70,7 +70,7 @@ int config_get(const char* section,const char *key,void* value) {
     if (hash_map_get(sec->key_values,k,(T*)&entry))
         return 1;
     if (!entry->is_cook) { //延迟解析
-        ConfigParser parser ;
+        ConfigParser *parser ;
         if (!hash_map_get(config_parsers,sk,(T*)&parser)) {
             T old_v = entry->value;
             entry->value = parser(k,entry->value); //那旧的value怎么办呢？free
