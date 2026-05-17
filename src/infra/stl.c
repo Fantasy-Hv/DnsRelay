@@ -312,7 +312,13 @@ void priority_remove(PriorityQueue* queue,T data) {
 }
 void priority_queue_free(PriorityQueue* queue) {}
 
-//--------------------------------------
+//--------------------------哈希表------------
+/**
+ * 哈希表需要实现 键-值存储，
+ * @param hash_function
+ * @param comparator
+ * @return
+ */
 HashMap * hash_map_create(HashFunction hash_function,Comparator comparator) {
     return NULL;
 }

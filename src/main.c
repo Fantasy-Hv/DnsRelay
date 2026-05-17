@@ -15,6 +15,7 @@
  * @return
  */
 int main(int argc,char* argv[]) {
+    sys_init();
     if (config_init()) {
         printf("fatal : config_init failed\n");
         return 1;

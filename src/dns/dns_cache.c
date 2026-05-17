@@ -6,10 +6,9 @@
 #include <threads.h>
 #include "dns/protocol.h"
 /**
- * 缓存初始化,保证可重入
+ * 缓存初始化,main会调用
  * @return
  */
-
 int dns_cache_init() {
     // 1.读取主机hosts文件
 

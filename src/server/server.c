@@ -8,12 +8,16 @@
 #include "infra/socket.h"
 #include "server/session.h"
 #include "server/server.h"
+
+#include <stdlib.h>
+
 #include "infra/stl.h"
 #include "infra/sys.h"
 #include "dns/protocol.h"
 #include "dns/id.h"
 #include "server/daemon.h"
 #include <threads.h>
+#include <bits/in.h>
 static ms request_timeout = VALUE_DEFAULT_REQUEST_TIMEOUT*1000;
 static int max_retry_time = VALUE_DEFAULT_MAX_RETRY_TIME;
 #define DNS_RECV_BUF_SIZE 1024
@@ -41,8 +45,10 @@ static char* recv_buf;
 int pack_recv(DnsPacket** dns_pack, NetEnd *src) {
     const int len = socket_recv_nowait(socket_holder, recv_buf, DNS_RECV_BUF_SIZE,src);
     if (len == 0) {
-        do_log(DEBUG,"server : no data in sock");
+        do_log(WARN,"server : no data in sock");
         return 1;
+    }else if (len == -1) {
+        do_log(ERROR,"pack recv fail: %s",sys_get_stacktrace());
     }
     return pack_deserialize(recv_buf, len, dns_pack);
 }
@@ -57,7 +63,10 @@ char* send_buf;
  * @param dest
  */
 void packet_send(const DnsPacket* dns_pack,const NetEnd* dest) {
-    if (!dns_pack|!dest)return;
+    if (!dns_pack||dest==NULL) {
+        do_log(WARN,"serv,pac send:dest null");
+        return;
+    }
    const int raw_pack_size = pack_serialize(dns_pack,send_buf);
    socket_send(socket_holder,send_buf,raw_pack_size,*dest) ;
 }
@@ -82,8 +91,10 @@ static NetEnd* pick_upstream() {
  * @return
  */
 static int init_socket() {
-     if (socket_create(UDP,&socket_holder))
-        return -1;
+     if (socket_create(&socket_holder)) {
+         do_log(ERROR,"sock creat fail:%s",sys_get_stacktrace());
+         return -1;
+     }
     int port;
     if (config_get(SERV_SECTION,KEY_SERVER_PORT,&port))
         port = VALUE_DEFAULT_SERVER_PORT;
@@ -128,80 +139,78 @@ static void batch_timeout() {
 
 /**
  * 处理收到的dns包
- * @param packet_in
- * @param source_end
  * @return
  */
-static int handle_dns_packet(const DnsPacket*packet_in,NetEnd source_end) {
+static int handle_dns_packet(const DnsPacket *packet_in, NetEnd source_end) {
+    DnsPacket *packet_out; // 临时数据包
 
-    DnsPacket* packet_out ;
-    if (packet_is_query(packet_in)) { //请求包
-        PacketDirection direction = pack_make_response_local(packet_in,&packet_out);
-        if (direction==CLIENT) { //本地可以直接响应
-            packet_send(packet_out,&source_end);
+    if (packet_is_query(packet_in)) {
+        //请求包
+        PacketDirection direction = pack_make_response_local(packet_in, &packet_out);
+        if (direction == CLIENT) {
+            //本地可以直接响应
+            packet_send(packet_out, &source_end);
             pack_free(packet_out);
         } // 需要转发
-        else if (!linked_list_is_empty(upstreams)) {
+        else {
             //构造中继包，申请id
             uint16_t relay_id;
             if (!id_alloc(&relay_id)) {
-                do_log(ERROR, "server : relay id exhausted");
+                do_log(WARN, "server : relay id exhausted");
                 return -1;
             }
             pack_make_query_relay(packet_in, relay_id, &packet_out);
             //发送中继包
             packet_send(packet_out, pick_upstream());
             // 开启会话
-            session_open(packet_in->header.id,source_end,packet_out);
+            session_open(packet_in->header.id, source_end, packet_out);
             //释放临时数据
             pack_free(packet_out);
-
         }
-        else do_log(ERROR,"server : no upstream server ");
-
-    }else { // 响应包
+    } else {
+        // 响应包
         //获取对应session
-        Session * session = session_get(packet_in);
-        if (session) { //返回响应给客户端
-            pack_make_response_relay(packet_in,&packet_out,session->client_id);
-            packet_send(packet_out,&session->client_ip);
+        Session *session = session_get(packet_in);
+        if (session) {
+            //返回响应给客户端
+            pack_make_response_relay(packet_in, &packet_out, session->client_id);
+            packet_send(packet_out, &session->client_ip);
             //结束会话
             session_close(session);
             id_free(packet_in->header.id);
             pack_free(packet_out);
-        }
-        else do_log(DEBUG,"server : no session match rsp, drop pack");
+        } else do_log(DEBUG, "server : no session match rsp, drop pack");
     }
     return 0;
 }
 
-static void server_loop() {
+static int server_loop() {
     // ReSharper disable once CppDFAEndlessLoop
     while (1) {
         // 准备select参数
-        Session * earliest_session = session_peek();
         ms next_timeout;
+        Session * earliest_session = session_peek();
         if (!earliest_session)
             next_timeout = -1;
         else get_session_timeout_remain(earliest_session,request_timeout,&next_timeout);
 
-        const int stat = socket_sleep_on(&socket_holder,1,next_timeout);
+        const int stat = socket_sleep_on(socket_holder,1,next_timeout);
 
         if (stat>=0) { // 收取dns数据包
             DnsPacket * packet ;NetEnd source_end;
-            while (!((pack_recv(&packet,&source_end)))) {
+            while (!pack_recv(&packet,&source_end)) {
                 handle_dns_packet(packet,source_end);
                 pack_free(packet);
             }
-
             batch_timeout();
         }
-        // 错误
+        // select错误
         else {
-            do_log(ERROR,"socket_sleep_on error : %s",get_syscall_error().msg);
-            return;
+            do_log(ERROR,"select error : %s",sys_get_stacktrace());
+            break;
         }
     }
+    return -1;
 }
 
 int server_start() {
@@ -211,8 +220,10 @@ int server_start() {
     //获取上游服务器列表
     upstreams = linked_list_create();
     config_get(SERV_SECTION,KEY_UPSTREAMS,upstreams);
-    if (linked_list_is_empty(upstreams))
-        do_log(WARN,"server:upstream not configured");
+    if (linked_list_is_empty(upstreams)) {
+        do_log(ERROR,"server:upstream not configured");
+        return -1;
+    }
     //创建守护线程
     thrd_t cache_ttl;
     thrd_create(&cache_ttl,daemon_dnscache_ttl,NULL);
@@ -223,8 +234,6 @@ int server_start() {
         return 1;
     }
     //进入主循环,处理请求
-    server_loop();
-
-    return 0;
+    return server_loop();
 }
 

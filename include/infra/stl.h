@@ -4,6 +4,7 @@
 
 #ifndef DNSRELAY_STL_H
 #define DNSRELAY_STL_H
+#include <stddef.h>
 #include <stdint.h>
 
 //删除和增加操作都是增删指针（一个无符号整型），容器在执行crud方法时，只是在对这个整型进行操作。
@@ -12,13 +13,22 @@ typedef void* K; //key的类型
 typedef int (*Comparator)(T a,T b); // 比较函数，返回“a-b”的值，以此判断元素大小等于关系
 typedef int (*HashFunction)( K key); //计算元素的哈希值
 
-//预定义的计算函数，可供上层选用,这里是直接将uint16拷贝了
+//预定义的计算函数，可供上层选用
+// 纯数字的哈希计算
 static  int hash_uint16_t(K key) {
-    return *(uint16_t*)key;
+    return (int)key;
 }
-// 字符串哈希函数
+// 字符串哈希函数，当K为指向字符串的指针时使用
 static int hash_str(K key) {
-    return 0;
+    // 直接抄Java的实现，经验公式
+    if (key == NULL) return 0;
+    const char* str = key;
+    int h = 0;
+    while (*str) {
+        h = 31 * h + (unsigned char)(*str);
+        str++;
+    }
+    return h;
 }
 //----------------向量--------------
 typedef struct Vector {
