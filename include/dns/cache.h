@@ -49,7 +49,7 @@ int dns_cache_put(const ResourceRecord * record);
  * @param result 结果列表，类型为T=ResourceRecord*，传入的列表必须有效
  * @return 0-命中 ，1-miss
  */
-int dns_cache_get(const char* name,Qtype type,LinkedList* result);
+int dns_cache_get(const char* qname,Qtype type,Class qclass,LinkedList* result);
 
 
 /**
