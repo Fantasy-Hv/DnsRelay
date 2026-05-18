@@ -28,6 +28,8 @@ add_executable(DnsRelay
         include/dns/id.h
         src/dns/id_factory.c
         include/server/daemon.h
-        src/server/daemons.c)
+        src/server/daemons.c
+        include/infra/exception.h
+        src/infra/linux/exception.c)
 target_link_libraries(DnsRelay PRIVATE Threads::Threads)
 target_include_directories(DnsRelay PRIVATE ${CMAKE_SOURCE_DIR}/include)

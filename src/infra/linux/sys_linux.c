@@ -2,39 +2,15 @@
 // Created by yian on 2026/5/8.
 //
 #ifdef __linux__
-#include <errno.h>
-#include <stdio.h>
-#include <string.h>
+
 #include <time.h>
 
-#include "infra/logger.h"
+#include "threads.h"
 #include "infra/sys.h"
 #include "infra/stl.h"
-static char msg [2048] ;
-HashMap* err_msgs ;
-char err_flag = 0;
-int exception_comparator(T a,T b) {
-    return strcmp(a,b);
-}
 
-// 用于在错误传播链上包装添加信息,*dest不能指向NULL
 
-// void str_app(char** dest,const char* app) {
-//     char * nmsg = malloc(strlen(*dest)+strlen(app)+2);
-//     int pos = strlen(*dest);
-//     strcpy(nmsg,*dest);
-//     nmsg[pos++] = '\n'; // \0 -> \n
-//     memcpy(&nmsg[pos],app,strlen(app)+1);
-//     free(*dest);
-//     *dest = nmsg;
-// }
-void sys_init() {
-    err_msgs = hash_map_create(hash_uint16_t,exception_comparator);
-    hash_map_put(err_msgs,(K)EFAULT,"ptr invalid\n");
-    hash_map_put(err_msgs,(K)EADDRINUSE,"addr occupied\n");
-    hash_map_put(err_msgs,(K)EINTR,"interrupted syscall\n");
-    hash_map_put(err_msgs,(K)EINVAL,"invalid argument\n");
-}
+
 // 返回单调毫秒时间戳
 int64_t sys_time_ms(void) {
     struct timespec t;
@@ -42,30 +18,6 @@ int64_t sys_time_ms(void) {
     return t.tv_sec * 1000 + t.tv_nsec / 1000000;
 }
 
-void sys_hook_stacktrace(int err_no,const char* at) {
-    if (!err_flag)
-        msg[0] = '\0'; // 本次错误第一条消息
-    char* errmsg=NULL;
-    hash_map_get(err_msgs,(K)err_no,(T*)&errmsg);
-
-    if (!errmsg) {  // 对未定义错误的降级处理
-        do_log(ERROR,"%d,no msg",err_no); //为了不和logger循环依赖，直接用printf输出
-        errmsg = "";
-    }
-    int net_r = strlen(msg);
-    memcpy(&msg[net_r],at,strlen(at)+1); // 带 \0
-    net_r+= strlen(at);
-    msg[net_r++] = '-';
-    memcpy(&msg[net_r],errmsg,strlen(errmsg)+1);
-    err_flag = 1;
-}
-
-// 查看调用栈信息，不要free
-char* sys_get_stacktrace(void) {
-    if (!err_flag)return "";
-    err_flag = 0;
-    return msg;
-}
 
 static int is_little_endian(void) {
     static int endian_checked = 0;

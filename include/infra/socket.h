@@ -55,7 +55,7 @@ int socket_bind(SocketHolder socket,uint16_t port);
  * @param buf 要发送的数据
  * @param buf_len 数据长度
  * @param dest 发送目标
- * @return
+ * @return  >0-拷贝到内核缓冲区的字节数，0-发送了0字节，-1-错误，需检查errno
  */
 int socket_send(SocketHolder socket,const void *buf, size_t buf_len,NetEnd dest);
 

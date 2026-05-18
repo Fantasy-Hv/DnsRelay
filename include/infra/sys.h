@@ -8,20 +8,14 @@
 #define LINUX 1
 #include <stdint.h>
 typedef struct {
-    unsigned int code;
     char* msg;
 }Exception;
 typedef int64_t ms;
 
-void sys_init();
+
 // 返回单调毫秒时间戳
 ms sys_time_ms(void);
 
-// 用于在错误传播链上添加错误信息,传入errno
-void sys_hook_stacktrace(int err_no,const char* at);
-
-// 获取上一次错误的调用栈信息,保证是有效字符串，不可重入，返回的字符串不要free,
-char* sys_get_stacktrace(void);
 
 // 获取系统hosts文件路径
 char* sys_hosts_path();

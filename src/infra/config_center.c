@@ -30,10 +30,12 @@ typedef struct {
 static HashMap* configs;
 // K = char* ， T=ConfigParser
 static HashMap* config_parsers;
+// key最长32字节
+#define KEY_SIZE 32
 Entry* create_entry(const char* key,T value) {
     Entry* entry = malloc(sizeof(Entry));
     entry->is_cook = 0;
-    entry->key = malloc(12);
+    entry->key = malloc(KEY_SIZE);
     strcpy(entry->key,key);
     entry->value = value;
     return entry;
@@ -50,7 +52,7 @@ ConfigSection* create_section(const char* section) {
 }
 
 void config_register_parser(const char* section,ConfigParser parser) {
-    char sec[16];strcpy(sec,section);
+    char sec[KEY_SIZE];strcpy(sec,section);
     hash_map_put(config_parsers,sec,parser);
 }
 
@@ -61,24 +63,28 @@ int config_init() {
 }
 int config_get(const char* section,const char *key,void* value) {
     if (!value)return 1;
-    char k[16]; strcpy(k,key);
-    char sk[16]; strcpy(sk,section);
+    char k[KEY_SIZE]; strcpy(k,key);
+    char sk[KEY_SIZE]; strcpy(sk,section);
+    // 获取对应的配置节
     ConfigSection* sec = NULL;
     if (hash_map_get(configs,k,(T*)&sec))
         return 1;
+    // 获取配置项
     Entry* entry = NULL;
     if (hash_map_get(sec->key_values,k,(T*)&entry))
         return 1;
-    if (!entry->is_cook) { //延迟解析
-        ConfigParser *parser ;
-        if (!hash_map_get(config_parsers,sk,(T*)&parser)) {
+    // 对配置值延迟解析
+    if (!entry->is_cook) {
+        ConfigParser parser ;
+        if (!hash_map_get(config_parsers,sk,(T*)&parser)) { // 找到对应的解析函数
             T old_v = entry->value;
             entry->value = parser(k,entry->value); //那旧的value怎么办呢？free
-            free(old_v);
+            free(old_v); //因为旧的value也是本层独有的内存副本，所以大胆free
             entry->is_cook=1;
         }
     }
-    *(T*)value =entry->value;
+    // *value = *entry->value;
+    memcpy(value,entry->value,sizeof(*entry->value));
     return 0;
 }
 

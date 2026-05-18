@@ -24,8 +24,8 @@ int logger_init() {
     output_channels[TRACE]=stdout; // 跟踪程序运行
     output_channels[DEBUG]=stdout; // 调试信息
     output_channels[INFO]=stdout; // 程序运行的关键节点
-    output_channels[WARN]=stdout; // 可恢复的错误
-    output_channels[ERROR]=stderr; // 必须终止程序
+    output_channels[WARN]=stdout; // 警告，可能会导致错误
+    output_channels[ERROR]=stderr; // 错误
     return 0;
 }
 

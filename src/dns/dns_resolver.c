@@ -2,7 +2,7 @@
 // Created by yian on 2026/5/9.
 //
 // 核心模块！！！其他模块可以没有，但是这个必须很完善。
-#include <signal.h>
+
 
 #include "dns/protocol.h"
 #include "dns/cache.h"
@@ -10,7 +10,6 @@
 #include <string.h>
 #include <netinet/in.h>
 
-#include "infra/logger.h"
 #include "infra/sys.h"
 #define DNS_REV_BUF_SIZE 1024
 /**
@@ -110,7 +109,19 @@ void pack_free(DnsPacket *dns_pack) {
     free_rrs(dns_pack->additionals);
     free(dns_pack);
 }
-
+SectionQuestion* question_clone(const SectionQuestion*orig) {
+    SectionQuestion* q = question_create();
+    q->qname = strdup(orig->qname);
+    q->qtype = orig->qtype;
+    q->qclass = orig->qclass;
+    return q;
+}
+Vector* questions_clone(Vector*questions) {
+    Vector* dup = vector_create(vector_size(questions));
+    for (int i = 0;i<vector_size(questions);i++)
+        vector_add(dup,question_clone(vector_get(questions,i)));
+    return dup;
+}
 /**
  * 创建一个空dns包，主要是为了初始化RR列表
  * @return
@@ -136,8 +147,7 @@ static Vector *rrs_clone(Vector *RRS) {
         const ResourceRecord *src = vector_get(RRS, i);
         ResourceRecord *item = malloc(sizeof(ResourceRecord));
         memcpy(item, src, sizeof(ResourceRecord));
-        item->name = strdup(src->name); // 连带内存也给我分配了，真方便！
-        // ReSharper disable once CppDFAMemoryLeak
+        item->name = strdup(src->name);
         item->rdata = malloc(src->rdata_length);
         memcpy(item->rdata, src->rdata, src->rdata_length);
         vector_add(clony, item);
@@ -149,7 +159,7 @@ DnsPacket *packet_clone(const DnsPacket *source) {
     DnsPacket *packet = pack_create();
     packet->header = source->header;
     //复制问题段
-    packet->questions = rrs_clone(source->questions);
+    packet->questions = questions_clone(source->questions);
     packet->answers = rrs_clone(source->answers);
     packet->authorites = rrs_clone(source->authorites);
     packet->additionals = rrs_clone(source->additionals);
@@ -445,15 +455,18 @@ static  int setRcode(DnsPacket* pack,Rcode rcode) {
 }
 /**
  * 构造空响应，用于标准查询下RD=0且没有缓存的情况。
+ *
  * @return
  */
 static int make_response_empty(const DnsPacket *query, DnsPacket **empty_response) {
-    DnsPacket *response = packet_clone(query);
+    DnsPacket *response = pack_create();
+    response->header = query->header;
+    RA_SET(response->header.flags);
+    setRcode(response,RCODE_NOERROR);
     response->header.answer_RRs = 0;
     response->header.additional_RRs = 0;
     response->header.authority_RRs = 0;
-    setRcode(*empty_response,RCODE_NOERROR);
-    RA_SET(response->header.flags);
+    response->questions = questions_clone(query->questions);
     *empty_response = response;
     return 0;
 }
@@ -466,18 +479,41 @@ static int make_response_empty(const DnsPacket *query, DnsPacket **empty_respons
  * @return
  */
 static int make_response_fail(const DnsPacket *query, DnsPacket **fail, Rcode rcode) {
-
+    make_response_empty(query,fail);
+    setRcode(*fail,rcode);
     return 0;
 }
 
 /**
- 根据qtype和qname判断此请求是否要放行
+ 根据qtype和qname判断此请求是否要放行,可以用来封禁域名(ext)
 @param pack
 @param rcode 响应状态，如果为NOERROR即为放行请求。其他情况为拒绝请求
  * @return
  */
-static int query_validate_qtype_qname(const DnsPacket *pack, Rcode *rcode) {
-    return 0;
+static void query_pre_validate(const DnsPacket *pack, Rcode *rcode) {
+    *rcode = RCODE_NOERROR;
+}
+// 检查该块内存区域是否全0
+static int memallz(char* mem,int len) {
+    while (len>0&&mem[--len]==0);
+    return !len;
+}
+/**
+ * 对构建好的请求进行检查，可以用来封禁ip
+ * @param response
+ * @param rcode
+ * @return
+ */
+static void query_post_validate(const DnsPacket * response,Rcode*rcode) {
+    //检查ans，如果ip有0.0.0.0返回NXDMAIN
+    Vector * ans = response->answers;
+    for (int i=0;i<vector_size(ans);i++) {
+        ResourceRecord* rr = vector_get(ans,i);
+        if ((rr->type==QTYPE_A||rr->type==QTYPE_AAAA)&&memallz(rr->rdata,rr->rdata_length)) {
+            *rcode = RCODE_NXDOMAIN;
+            return;
+        }
+    }
 }
 
 /**
@@ -501,15 +537,84 @@ int pack_make_query_relay(const DnsPacket *query_pack, uint16_t relay_id, DnsPac
  * @param client_id 客户端查询请求的id
  */
 void pack_make_response_relay(const DnsPacket *recv, DnsPacket **send, uint16_t client_id) {
+    * send = packet_clone(recv);
+    (*send)->header.id = client_id;
+    Vector* rrs = recv->answers;
+    // 缓存资源记录
+    for (int i=0;i<vector_size(rrs);i++) {
+        ResourceRecord * rr = vector_get(rrs,i);
+        if (rr->ttl>0)
+            dns_cache_put(rr);
+    }
 }
+void static pack_make_std_response(const DnsPacket*query,DnsPacket**ans,const Vector* ansRR,uint16_t AA) {
+    make_response_empty(query,ans);
+    DnsPacket * pac = *ans;
 
+    if (AA) AA_SET(pac->header.flags);
+    pac->header.answer_RRs = vector_size(ansRR);
+    pac->answers = rrs_clone(ansRR);
+
+}
 /**
  * 生成服务器内部失败响应包
  */
 void pack_make_inner_error(const DnsPacket *query, DnsPacket **answer) {
+    make_response_fail(query,answer,RCODE_SERVFAIL);
 }
 
 PacketDirection pack_make_response_local(const DnsPacket *query, DnsPacket **response) {
+    switch (OPCODE_GET(query->header.flags)) {
+        case QUERY:
+            //检查问题个数
+            if (query->header.qcount<0||query->header.qcount>1) {
+                make_response_fail(query,response,RCODE_NOTIMP);
+                break;
+            }
+            if (query->header.qcount == 0) {
+                make_response_empty(query,response);
+                break;
+            }
+            // 前置业务检查
+            Rcode code;
+            query_pre_validate(query,&code);
+            if (code!=RCODE_NOERROR) {
+                make_response_fail(query,response,code);
+                break;
+            }
+            // 现在才真正开始回答
+            //查看缓存
+            Vector *ansRR = vector_create(5);
+            SectionQuestion *q = vector_get(query->questions, 0);
+            if (dns_cache_get(q->qname, q->qtype, q->qclass, ansRR)) {
+                // 缓存没有，看Rd
+                vector_free(ansRR);
+                if (RD_GET(query->header.flags))
+                    return UPSTREAM;
+                // 不需要转发
+                make_response_empty(query,response);
+                break;
+            }
+            // 查到缓存，构造响应包
+            pack_make_std_response(query,response,ansRR,0);
+
+            // 后置业务检查
+            query_post_validate(*response,&code);
+            if (code!=RCODE_NOERROR) { // 检查不通过，返回对应失败响应
+                pack_free(*response);
+                make_response_fail(query,response,code);
+            }
+            break;
+
+        case IQUERY:
+            make_response_fail(query,response,RCODE_NOTIMP);
+            break;
+        case STATUS:
+            make_response_status(query,response);
+            break;
+        default: make_response_empty(query,response);
+    }
     return CLIENT;
 }
+
 

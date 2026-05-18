@@ -14,12 +14,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "infra/exception.h"
 
 
 int socket_create(SocketHolder *socket_holder) {
     int fd = socket(AF_INET6,SOCK_DGRAM,0);
     if (fd==-1) {
-        sys_hook_stacktrace(errno,"socket_create");
+        ex_throw("syscall socket");
         return -1;
     }
     int opt = 0;
@@ -37,7 +38,7 @@ int socket_bind(SocketHolder socket,u_int16_t port) {
 
     int ret = bind(socket,(struct  sockaddr*)&addr,sizeof(struct sockaddr_in6));
     if (ret==-1)
-         sys_hook_stacktrace(errno,"socket_bind");
+         ex_throw("syscall bind");
     return ret;
 }
 
@@ -47,7 +48,7 @@ int socket_bind(SocketHolder socket,u_int16_t port) {
  * @param buf
  * @param buf_len
  * @param dest
- * @return >0-拷贝到内核缓冲区的字节数，0-发送了0字节，-1-错误，需检查errno
+ * @return >0-拷贝到内核缓冲区的字节数，0-发送了0字节，-1-错误
  */
 int socket_send(SocketHolder socket,const void *buf, size_t buf_len,NetEnd dest) {
     // 构造地址
@@ -78,7 +79,7 @@ int socket_send(SocketHolder socket,const void *buf, size_t buf_len,NetEnd dest)
     int ret;
     ret = sendto(socket, buf, buf_len,SOCK_NONBLOCK, addr, add_len);
     if (ret==-1)
-        sys_hook_stacktrace(errno,"socket_send");
+        ex_throw("syscall sendto");
     free(addr);
     return ret;
 }
@@ -99,7 +100,7 @@ int socket_recv_nowait(SocketHolder socket,void *buf, size_t buf_len, NetEnd *so
     //收包
     rn = recvfrom(socket,buf,buf_len,SOCK_NONBLOCK,(struct sockaddr*)&src,&addrlen);
     if (rn==-1) {
-        sys_hook_stacktrace(errno,"recvfrom");
+        ex_throw("syscall recvfrom");
         return rn;
     }
     // 拿地址
@@ -138,7 +139,7 @@ int socket_sleep_on(SocketHolder socket_holder,int socket_cnt,ms timeout) {
     int ret =  select(socket_holder+1,&set,NULL,NULL,&time);
     // 错误记录
     if (ret<0)
-       sys_hook_stacktrace(errno,"select");
+       ex_throw("syscall select");
     return ret;
 }
 #endif
