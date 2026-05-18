@@ -5,6 +5,7 @@
 #ifndef DNSRELAY_STL_H
 #define DNSRELAY_STL_H
 #include <stdint.h>
+#include <string.h>
 
 //删除和增加操作都是增删指针（一个无符号整型），容器在执行crud方法时，只是在对这个整型进行操作。
 typedef void* T; //值的类型
@@ -12,10 +13,36 @@ typedef void* K; //key的类型
 typedef int (*Comparator)(T a,T b); // 比较函数，返回“a-b”的值，以此判断元素大小等于关系
 typedef int (*HashFunction)( K key); //计算元素的哈希值
 
-//预定义的计算函数，可供上层选用,这里是直接将uint16拷贝了
-static  int hash_uint16_t(K key) {
+//预定义的计算函数，可供上层选用
+static inline int hash_func_uint16(K key) {
     return *(uint16_t*)key;
 }
+
+static inline int compare_uint16(T a,T b) {
+    const uint16_t value_a = *(uint16_t*)a;
+    const uint16_t value_b = *(uint16_t*)b;
+    if (value_a > value_b) return 1;
+    if (value_a < value_b) return -1;
+    return 0;
+}
+
+static inline int hash_func_str(K key) {
+    const unsigned char *str = (const unsigned char *) key;
+    int hash = 5381;
+    while (*str) {
+        hash = ((hash << 5) + hash) + *str;
+        str++;
+    }
+    return hash;
+}
+
+static inline int compare_cstr(T a,T b) {
+    if (a == NULL && b == NULL) return 0;
+    if (a == NULL) return -1;
+    if (b == NULL) return 1;
+    return strcmp((const char *) a, (const char *) b);
+}
+#define hash_uint16_t hash_func_uint16
 //----------------向量--------------
 typedef struct Vector {
     T* elements; //元素列表
@@ -149,6 +176,7 @@ T priority_queue_peek(PriorityQueue* queue);
  * @param data
  */
 void priority_remove(PriorityQueue* queue,T data);
+void priority_queue_free(PriorityQueue* queue);
 
 
 
@@ -158,9 +186,11 @@ typedef struct {
     float load_factor ; //装填因子，默认0.75
     HashFunction hash_function; // 哈希函数计算的哈希值不要直接拿来当索引，不安全。
     Comparator comparator;
+    int size;
 }HashMap;
 
 HashMap * hash_map_create(HashFunction hash_function,Comparator comparator);
+void hash_map_free(HashMap* map);
 
 /**
   添加键值对，应当满足幂等性。
