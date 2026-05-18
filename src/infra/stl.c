@@ -283,17 +283,162 @@ void linked_list_free(LinkedList* list) {
 }
 
 //-------------------------------
+// typedef struct HeapNode {
+//     T data;
+//     char is_deleted;
+// } HeapElement;
+
+// /**
+//  * 最小值优先的队列，自扩容
+//  * 允许删除元素，删除元素时，会将所有相同元素都删除
+//  *
+//  */
+// typedef struct  {
+//     Comparator comparator;
+//     HeapElement * elements;
+//     int size; // 当前元素数量（包括逻辑删除的元素）
+//     int capacity; //当前容量
+
+// }PriorityQueue;
+static int heap_element_compare(const PriorityQueue *queue,
+                                const HeapElement *a,
+                                const HeapElement *b) {
+    if (a == NULL || b == NULL) {
+        return 0;
+    }
+    if (a->is_deleted && b->is_deleted) {
+        return 0;
+    }
+    if (a->is_deleted) {
+        return -1;
+    }
+    if (b->is_deleted) {
+        return 1;
+    }
+    if (queue == NULL || queue->comparator == NULL) {
+        return 0;
+    }
+    return queue->comparator(a->data, b->data);
+}
+
+static void heap_element_swap(HeapElement *a, HeapElement *b) {
+    if (a == NULL || b == NULL) {
+        return;
+    }
+    HeapElement temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
+static void down(PriorityQueue* queue,int u){
+    if (queue == NULL || u <= 0 || u > queue->size) {
+        return;
+    }
+
+    while (1) {
+        int t = u;
+        int left = u * 2;
+        int right = u * 2 + 1;
+
+        if (left <= queue->size &&
+            heap_element_compare(queue, &queue->elements[left], &queue->elements[t]) < 0) {
+            t = left;
+        }
+
+        if (right <= queue->size &&
+            heap_element_compare(queue, &queue->elements[right], &queue->elements[t]) < 0) {
+            t = right;
+        }
+        if (t == u) {
+            return;
+        }
+
+        heap_element_swap(&queue->elements[u], &queue->elements[t]);
+        u = t;
+    }
+}
+
+static void up(PriorityQueue* queue,int u){
+    if(queue == NULL || u <= 0 || u > queue->size) {
+        return;
+    }
+
+    while (u > 1) {
+        int parent = u / 2;
+        if (heap_element_compare(queue, &queue->elements[u], &queue->elements[parent]) >= 0) {
+            return;
+        }
+
+        heap_element_swap(&queue->elements[u], &queue->elements[parent]);
+        u = parent;
+    }
+}
+
+static int priority_queue_grow(PriorityQueue* queue,int min_capacity) {
+    if (queue == NULL) {
+        return 0;
+    }
+
+    // capacity 表示“最多可存放多少个堆元素”，因为堆从下标 1 开始，
+    // 实际分配数组时需要多预留一个 elements[0] 槽位。
+    if (min_capacity <= queue->capacity) {
+        return 1;
+    }
+
+    int new_capacity = queue->capacity;
+    if (new_capacity <= 0) {
+        new_capacity = 1;
+    }
+
+    while (min_capacity > new_capacity) {
+        new_capacity <<= 1;
+    }
+
+    const size_t slot_count = (size_t) new_capacity + 1;
+    HeapElement *new_elements = realloc(queue->elements, sizeof(HeapElement) * slot_count);
+    if (new_elements == NULL) {
+        return 0;
+    }
+
+    queue->elements = new_elements;
+    queue->capacity = new_capacity;
+    return 1;
+}
 
 PriorityQueue* priority_queue_create(Comparator comparator) {
-    return NULL;
+    PriorityQueue* queue = malloc(sizeof(PriorityQueue));
+    if (queue == NULL) {
+        return NULL;
+    }
+
+    const int init_capacity = 16;
+    queue->elements = malloc(sizeof(HeapElement) * (init_capacity + 1));
+    if (queue->elements == NULL) {
+        free(queue);
+        return NULL;
+    }
+    queue->comparator = comparator;
+    queue->capacity = init_capacity;
+    queue->size = 0;
+    return queue;
 }
+
+
 /**
  * 添加元素，比较逻辑由队列的Comparator决定，允许添加相同元素
  * @param queue
  * @param data
  */
 void priority_queue_add(PriorityQueue* queue,T data) {
+    if( queue == NULL ) { 
+        return;
+    }
+    
+    if (!priority_queue_grow(queue,queue->size + 1)) {
+        return;
+    }
 
+    queue->elements[++ queue->size]
 }
 //取最小的元素，如果队列为空，返回NULL
 T priority_queue_pop(PriorityQueue* queue) {
