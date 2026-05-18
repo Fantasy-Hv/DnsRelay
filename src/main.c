@@ -1,11 +1,12 @@
 #include <stdio.h>
-#include <bits/in.h>
 
 #include "../include/infra/config.h"
 #include "../include/server/server.h"
+#include "dns/cache.h"
 #include "dns/id.h"
 #include "infra/logger.h"
 #include "server/session.h"
+#include "infra/sys.h"
 /**
  * @param -c <path> : 指定配置文件路径
  * @param -d : 调试模式
@@ -14,6 +15,7 @@
  * @return
  */
 int main(int argc,char* argv[]) {
+    sys_init();
     if (config_init()) {
         printf("fatal : config_init failed\n");
         return 1;

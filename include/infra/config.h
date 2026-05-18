@@ -23,8 +23,10 @@
 #else
 #define CONFIG_FILE_PATH "./config.ini"
 #endif
-
-typedef void* ConfigParser(const char* key,const char* value);
+/**
+ * 配置项解析器，读入k-v,生成解析后的值
+ */
+typedef void* (*ConfigParser)(const char* key,const char* value);
 
 /**
  * 为某个节注册配置解析器
@@ -33,12 +35,15 @@ typedef void* ConfigParser(const char* key,const char* value);
  */
 void config_register_parser(const char* section,ConfigParser parser);
 
-
+/**
+ * 初始化配置中心状态
+ * @return
+ */
 int config_init();
 /**
  * 获取配置属性，如果属性不存在，不应该修改value内容
  * @param key 键
- * @param value 值指针,必须指向有效地址
+ * @param value 值指针,必须指向一块有效内存,如果配置存在，会将配置的值拷贝到该内存中
  * @return 是否存在该配置，0为存在，1为不存在
  */
 int config_get(const char* section,const char *key,void* value);

@@ -4,40 +4,41 @@
 //需要线程安全的实现，使用<threads.h>
 #include "dns/cache.h"
 #include <threads.h>
+#include "dns/protocol.h"
 /**
- * 缓存初始化,保证可重入
+ * 缓存初始化,main会调用
  * @return
  */
-
 int dns_cache_init() {
-    // 1.读取主机hosts文件
 
     return 0;
 }
 
+
 /**
- * @brief 添加缓存,需要实现缓存淘汰算法
- * @param domain_name 纯字符串。推荐使用树形结构实现域名缓存解析，例如特殊设计的trie树。
- * @param ips T = NetEnd*
- * @return 添加成功返回0，异常返回-1
+ * 缓存RR记录
+ * @param record
+ * @return 0-缓存成功 1-缓存失败
  */
-int dns_cache_put(const char* domain_name,const LinkedList* ips) {
+int dns_cache_put(const ResourceRecord * record) {
     return 0;
 }
 
 /**
- * @brief 查询缓存
- * @param domain_name 纯字符串。
- * @param ips T = NetEnd*
- * @return 命中缓存返回0,未命中返回1
+ * 根据name和type查询对应的RR
+ * @param name RR的name
+ * @param type RR类型
+ * @param result 结果列表，类型为T=ResourceRecord*,指向缓存中RR的拷贝，传入的列表必须有效,
+ * @return 0-命中 ，1-miss
  */
-int dns_cache_get(const char* domain_name, LinkedList* ips) {
+int dns_cache_get(const char* qname,Qtype type,Class qclass,Vector* result) {
     return 0;
 }
 
+
 /**
- *清理过期缓存
- * @return
+ *清理过期缓存,
+ * @return 0 正常，-1失败
  */
 int dns_cache_prune() {
     return 0;

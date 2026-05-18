@@ -6,6 +6,9 @@
 #include "dns/protocol.h"
 #include <stdint.h>
 
+#include "infra/socket.h"
+#include "infra/sys.h"
+
 
 typedef struct {
     ms timestamp; //上一次请求转发时的时间戳，如果请求不需要转发，为0.
@@ -17,7 +20,6 @@ typedef struct {
     NetEnd client_ip;
     RelayInfo relay_info;
 }Session;
-
 /**
  * 初始化会话存储，不要重复调用
  */
@@ -53,7 +55,7 @@ Session* session_peek();
 
 
 /**
- * 将会话挂起至等待队列
+ * 启动会话的超时定时器
  * @param session
  * @return
  */

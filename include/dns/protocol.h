@@ -6,8 +6,6 @@
 #define DNSRELAY_PROTOCOL_H
 #include "infra/stl.h"
 #include <stdint.h>
-#include "infra/socket.h"
-#include "dns/cache.h"
 #define MAX_PACKET_SIZE 512
 //0=查询报文，1=响应报文
 #define IS_QUERY(flags) ((flags >> 15)^1)
@@ -19,7 +17,7 @@ typedef enum {
     STATUS, // 服务器状态查询请求
 }OpCode;
 #define OPCODE_GET(flags) ((flags >> 12)&0xf)
-//AA标志响应中的 Answer 段来自该域名的权威名称服务器
+//AA标志：响应中的 Answer 段来自该域名的权威名称服务器
 #define AA_GET(flags) ((flags >> 10)&1)
 #define AA_SET(flags) (flags|= 0x0400)
 #define TC_GET(flags) ((flags >> 9)&1)
@@ -68,7 +66,7 @@ typedef struct {
     /**
      * 如果以in-addr.arpa 结尾，表明这是一个反向查询
      */
-    char* qname; ////域名，dns域名编码，不定长字节自解码字段
+    char* qname; //域名，dns域名编码，不定长字节自解码字段
     uint16_t qtype; // 查询类型
     uint16_t qclass;
 }SectionQuestion;
@@ -88,17 +86,17 @@ typedef enum { // 不要随意更改顺序
     QTYPE_AAAA = 28, // ipv6
 }Qtype;
 typedef enum {
-    QCLASS_IN=1 // 互联网地址类
+    QCLASS_IN=1 // 互联网地址类，只需要支持这个类型即可
 }Class;
 /**
  * Rdata格式
- *  class   type   rdata                                name
+ *  class   type   rdata
  *  IN      A       大端序4字节ipv4地址
  *  IN      AA      大端序16字节ipv6地址
  *  IN    CNAME     name的标准名称，dns域名编码
  *  IN    NS        该区域的权威服务器域名，dns域名编码
  *  IN    PTR       用于反向dns解析查询 ，此时name为ip地址，有特殊编码规则，对于PTR记录的query,同样只需要
- *  IN    SOA       较为复杂。。。
+ *  IN    SOA       较为复杂。。。作为中转服务器貌似没有必要解析
 
  */
 typedef struct {
@@ -112,9 +110,9 @@ typedef struct {
 
 
 typedef struct {
-    SectionHeader header; //控制信息+后续段数量
+    SectionHeader header; // 控制信息+后续段数量
     Vector*  questions; // T = SessionQuestion*
-    //下面三个段的列表元素类型T = ResourceRecord*
+    //下面三个段的列表元素类型T = ResourceRecord*，并且是可选的
     /**
      * 对question的直接回答
      */
@@ -134,7 +132,9 @@ typedef struct {
     Vector* additionals; // 权威域名服务器的ip
 } DnsPacket;
 
+ResourceRecord *rr_create();
 
+void rr_free(ResourceRecord *rr);
 /**
  *
  * @param dns_pack 释放该dns包占用的内存
@@ -176,7 +176,16 @@ int packet_is_query(const DnsPacket* packet);
 int pack_make_query_relay(const DnsPacket * query_pack,uint16_t relay_id,DnsPacket** relay_pack) ;
 
 /**
+ * 根据上游应答构造响应包
+ * @param recv 上游应答
+ * @param send 返回给客户端的响应
+ * @param client_id 客户端查询包的id
+ */
+void pack_make_response_relay(const DnsPacket* recv,DnsPacket** send,uint16_t client_id);
+
+/**
  *对到来的请求包尝试构建本地应答
+ *这里要对内容进行解析判断
  *@param query 客户端请求包
 *@param response 下一步要发送的dns包,如果本机可回答，返回响应包;
  *如果需要查询上游，返回null
@@ -185,12 +194,11 @@ int pack_make_query_relay(const DnsPacket * query_pack,uint16_t relay_id,DnsPack
 PacketDirection pack_make_response_local(const DnsPacket* query,DnsPacket** response);
 
 /**
- * 根据上游应答构造响应包
- * @param recv 上游应答
- * @param send 返回给客户端的响应
- * @param client_id 客户端查询包的id
+ * 生成服务器内部错误响应包
+ *
  */
-void pack_make_response_relay(const DnsPacket* recv,DnsPacket** send,uint16_t client_id);
+void pack_make_inner_error(const DnsPacket* query,DnsPacket ** answer ) ;
+
 
 /**
  * @brief 将网络字节流反序列化为dns包
@@ -208,12 +216,4 @@ int pack_deserialize(const char* raw_pack,int len,DnsPacket** packet) ;
  * @return 序列化后的dns包大小，异常返回-1
  */
 int pack_serialize(const DnsPacket* dns_pack,char*  packet_buf);
-
-/**
- * 生成服务器内部错误响应包
- *
- */
-void pack_make_inner_error(const DnsPacket* query,DnsPacket ** answer ) ;
-
-
 #endif //DNSRELAY_PROTOCOL_H

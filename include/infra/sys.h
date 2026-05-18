@@ -8,17 +8,16 @@
 #define LINUX 1
 #include <stdint.h>
 typedef struct {
-    unsigned int code;
     char* msg;
 }Exception;
 typedef int64_t ms;
-ms sys_time_ms(void);   // 跨平台返回单调毫秒时间戳
-char* sys_datetime_now(); // 返回当前日期时间字符串， YYYY-MM-DD hh：mm：ss
-Exception get_syscall_error(void); // 获取上一次系统调用错误信息
-/**
- * 获取系统hosts文件路径
- * @return
- */
+
+
+// 返回单调毫秒时间戳
+ms sys_time_ms(void);
+
+
+// 获取系统hosts文件路径
 char* sys_hosts_path();
 
 

@@ -4,6 +4,7 @@
 
 #ifndef DNSRELAY_STL_H
 #define DNSRELAY_STL_H
+#include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
