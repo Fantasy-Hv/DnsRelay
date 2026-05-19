@@ -13,7 +13,7 @@ typedef void* T; //值的类型
 typedef void* K; //key的类型
 typedef int (*Comparator)(T a,T b); // 比较函数，返回“a-b”的值，以此判断元素大小等于关系
 typedef int (*HashFunction)( K key); //计算元素的哈希值
-
+typedef void (*KeyDestructor)(K key);
 //预定义的计算函数，可供上层选用
 static inline int hash_func_uint16(K key) {
     return *(uint16_t*)key;
@@ -139,6 +139,7 @@ typedef struct HeapNode {
     char is_deleted;
 } HeapElement;
 
+
 /**
  * 最小值优先的队列，自扩容
  * 允许删除元素，删除元素时，会将所有相同元素都删除
@@ -202,11 +203,13 @@ void hash_map_free(HashMap* map);
 
 /**
   添加键值对，应当满足幂等性。
+  如果已经有对应key了，就覆盖值
  * @param map
- * @param key
+ * @param key ，容器会存储这个key
  * @param data
+   @return 0-key不存在于原本的map中，1-key存在于map中
  */
-void hash_map_put(HashMap* map,K key,T data);
+int hash_map_put(HashMap* map,K key,T data);
 
 /**
  *
@@ -216,5 +219,12 @@ void hash_map_put(HashMap* map,K key,T data);
  * @return 0-找到数据，1-没有找到数据
  */
 int hash_map_get(HashMap* map,K key,T* result);
-void hash_map_remove(HashMap* map,K key);
+
+/**
+ * 根据key删除键值对
+ * @param map
+ * @param key
+ * @param destructor key的内存释放函数，如果key是特殊类型，需要这个来释放容器持有的内存。
+ */
+void hash_map_remove(HashMap* map,K key,KeyDestructor destructor);
 #endif //DNSRELAY_STL_H
