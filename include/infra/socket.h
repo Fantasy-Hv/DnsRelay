@@ -5,6 +5,7 @@
 #define DNSRELAY_SOCKET_H
 #include <stdint.h>
 
+#include "stl.h"
 #include "utils.h"
 /**
  * UDP socket 抽象层，对系统调用的简单封装
@@ -80,4 +81,6 @@ int socket_sleep_on(SocketHolder socket_holder,int socket_cnt,ms timeout);
  * @return 0成功，-1失败
  */
 int ipstr2binary(const char *,NetEnd**);
+
+void sock_config_free_netend(T value) ;
 #endif //DNSRELAY_SOCKET_H

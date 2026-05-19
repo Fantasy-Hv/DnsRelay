@@ -288,13 +288,27 @@ int server_config_parser(const char* key,const char* value,T* result) {
         *result = (T)atol(value);
         return 0;
     }
-    *result =strdup(value); // 降级为原字符串
-    return 0;
+    // 降级为原字符串
+    return -1;
 }
+
+/**
+ * 解析值清理函数
+ * @param key
+ * @param value
+ */
+void server_config_cleaner(const char * key,T value) {
+    if (strcmp(key,KEY_UPSTREAMS)) {
+        LinkedList * ups = value;
+        linked_list_foreach(ups,sock_config_free_netend);
+    }
+}
+
 
 int server_start() {
     ex_try();
     config_register_parser(SERV_SECTION,server_config_parser);
+    config_register_cleaner(SERV_SECTION,server_config_cleaner);
     //初始化降级策略配置
     config_get(SERV_SECTION,KEY_PACKET_TIMEOUT,(T*)&request_timeout);
     config_get(SERV_SECTION,KEY_MAX_RETRY_TIME,(T*)&max_retry_time);

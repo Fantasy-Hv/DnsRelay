@@ -165,4 +165,9 @@ int socket_sleep_on(SocketHolder socket_holder,int socket_cnt,ms timeout) {
     ex_throw("ipstr2binary");
     return -1;
 }
+
+ void sock_config_free_netend(T value) {
+    NetEnd* end = value;
+    free(end);
+}
 #endif

@@ -89,6 +89,12 @@ void question_free(SectionQuestion *q) {
     free(q->qname);
     free(q);
 }
+//释放列表中RR的内存,连同列表也一起释放
+void free_questions(Vector* questions) {
+    for (int i = 0; i < vector_size(questions); i++)
+        question_free(vector_get(questions, i));
+    vector_free(questions);
+}
 
 /**
  * 释放列表中RR的内存,连同列表也一起释放
@@ -106,7 +112,8 @@ void free_rrs(Vector *vector) {
 void pack_free(DnsPacket *dns_pack) {
     //1.需要释放三个段
     // 包结构体 <-- 三个列表 <-- 列表的所有RR <-- RR的所有指针
-    // free_rrs(dns_pack->questions);
+    // 一个包，不管逻辑上有没有这4个段的数据，都会有这些列表
+    free_questions(dns_pack->questions);
     free_rrs(dns_pack->answers);
     free_rrs(dns_pack->authorites);
     free_rrs(dns_pack->additionals);

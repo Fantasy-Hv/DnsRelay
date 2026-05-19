@@ -37,7 +37,7 @@ static int session_comparator(void* a, void* b) {
 
 int session_factory_init() {
     sessions_queue = priority_queue_create(session_comparator);
-    agent_id_sessions = hash_map_create(hash_uint16_t,session_comparator);
+    agent_id_sessions = hash_map_create(hash_uint16_t,compare_uint16);
     return !sessions_queue || !agent_id_sessions;
 }
 

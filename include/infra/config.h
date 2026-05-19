@@ -11,7 +11,7 @@
   ...
  * config只负责读取原始字符串键值对，不关心配置项具体内容，因此如果上游模块对配置项值的类型有要求
  * 就需要注册配置解析函数，由于c没有反射，config模块在初始化时没办法主动获取各个模块的配置解析函数
- * 因此需要上游模块在自己的初始化方法中调用配置模块的注册函数，把配置解析函数注册到配置系统中
+ * 因此需要上游模块在自己的初始化方法中调用配置模块的注册函数，把配置解析器注册到配置系统中
  * 如果不注册，config_get拿到的默认就是配置文件中的原始字符串，或者上次通过config_set设定的值
  */
 
@@ -24,11 +24,18 @@
 #define CONFIG_FILE_PATH "./config.ini"
 #endif
 /**
- * 配置项解析器，读入k-v,生成解析后的值
+ * 配置项解析器，读入k-v,生成解析后的值（基本类型或指针，如果是指针，需要在这里分配内存，这块内存此后就由配置中心持有），
  * 0解析成功，-1解析失败
  */
 typedef int (*ConfigParser)(const char* key,const char* value,T* result);
 
+/**
+ * 配置值清理函数。
+ * 当配置解析器生成的值是指针时，
+ * 应当注册对应的配置值清理函数，
+ * 用来在配置更新时回收解析器所申请的内存。
+ */
+typedef void (*ConfigCleaner)(const char* key,T value);
 /**
  * 为某个节注册配置解析器
  * @param section
@@ -36,6 +43,11 @@ typedef int (*ConfigParser)(const char* key,const char* value,T* result);
  */
 void config_register_parser(const char* section,ConfigParser parser);
 
+/**
+ * 为某个节注册配置值清理函数
+ * @param cleaner
+ */
+void config_register_cleaner(const char* section,ConfigCleaner cleaner);
 /**
  * 初始化配置中心状态
  * @return

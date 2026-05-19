@@ -114,6 +114,7 @@ void linked_list_free(LinkedList* list);
 void linked_list_addFirst(LinkedList* list,T data);
 void linked_list_addLast(LinkedList* list,T data);
 void linked_list_clear(LinkedList*list);
+void linked_list_foreach(LinkedList * list,void (*consumer)(T value));
 int linked_list_is_empty(LinkedList* list);
 /**
  * 删除元素
@@ -186,10 +187,16 @@ typedef struct {
     Vector* buckets; // 向量的每个元素都是一个链表,链表的元素类型为数据类型T。可以用linklist,也可以用LinkNode
     float load_factor ; //装填因子，默认0.75
     HashFunction hash_function; // 哈希函数计算的哈希值不要直接拿来当索引，不安全。
-    Comparator comparator;
+    Comparator comparator; // key的比较函数
     int size;
 }HashMap;
 
+/**
+ *
+ * @param hash_function key 的哈希函数
+ * @param comparator key的比较函数
+ * @return
+ */
 HashMap * hash_map_create(HashFunction hash_function,Comparator comparator);
 void hash_map_free(HashMap* map);
 

@@ -14,7 +14,7 @@
 static char* LEVEL_STR[LEVEL_NUM]={"TRACE","DEBUG","INFO","WARN","ERROR"};
 static  LogLevel logging_level = INFO; //日志过滤级别
 static FILE* output_channels[LEVEL_NUM] ; // 各级别的输出流
-
+//日志模块的配置值都是基本类型，因此不用注册配置清理函数
 int log_config_parser(const char* key,const char* value,T* result) {
     if (strcmp(key,KEY_LOG_LEVEL)) {
         LogLevel level = TRACE;
@@ -27,7 +27,6 @@ int log_config_parser(const char* key,const char* value,T* result) {
         *result = (T)INFO;
         return 0;
     }
-
     return 0;
 }
 

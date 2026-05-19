@@ -64,14 +64,12 @@ void entry_free(Entry*entry) {
 int entry_compare(T value1,T value2) {
     Entry* e1 = value1;
     Entry * e2 = value2;
-    if (strcmp(e1->key,e2->key))
-        return 0;
-    return *e1->key-*e2->key; // 比较首字符
+    return compare_cstr(e1->key,e2->key);
 }
 
 ConfigSection* create_section() {
     ConfigSection* sec = malloc(sizeof(ConfigSection));
-    sec->entries = hash_map_create(hash_str,entry_compare);
+    sec->entries = hash_map_create(hash_func_str,compare_cstr);
     return sec;
 }
 
@@ -80,14 +78,17 @@ void config_register_parser(const char* section,ConfigParser parser) {
     hash_map_put(config_parsers,sec,parser);
 }
 
+void config_register_cleaner(const char* section,ConfigCleaner cleaner) {
+
+}
 
 /**
  * 初始化配置容器
  * @return
  */
 int config_init() {
-    config_parsers = hash_map_create(hash_str,func_compare);
-    configs = hash_map_create(hash_str,entry_compare);
+    config_parsers = hash_map_create(hash_func_str,compare_cstr);
+    configs = hash_map_create(hash_func_str,compare_cstr);
     return !(configs&&config_parsers);
 }
 int config_get(const char* section,const char *key,T* value) {
@@ -140,6 +141,7 @@ int config_set(const char* section,const char *key,T value) {
     if (!hash_map_get(sec->entries,(K)key,(T*)&entry)&&!entry->is_cook)
             free(entry->value);
     entry->is_cook = 1;
+    // fixme 旧的解析值怎么办？-->让上层再注册一个配置解析值销毁函数
     hash_map_put(sec->entries,k,value);
     return 0;
 }
@@ -165,6 +167,7 @@ int config_inject(const char* section,const char *key,const char* value) {
         // 释放旧数据
         if (!entry->is_cook)
             free(entry->value); // 释放旧的原始字符串
+        //fixme 如果原本有解析值呢？这里就泄漏了。
     }
     hash_map_put(sec->entries,k,strdup(value));
     return 0;
