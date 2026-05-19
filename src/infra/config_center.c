@@ -16,9 +16,8 @@
 
 typedef struct {
     char is_cook;
-    char* key;
     T value;
-}Entry;
+}ConfigValue;
 
 /**
  *配置文件格式
@@ -35,37 +34,31 @@ typedef struct {
  * @return 是否存在该配置，0为存在，1为不存在
  */
 typedef struct {
-    // K=char* ,T = Entry*
+    // K=char* ,T = ConfigValue*
     HashMap* entries;
 }ConfigSection;
 
 // K=char* ,T=ConfigSection*
-static HashMap* configs;
+static HashMap* configs_sections;
 // K = char* ， T=ConfigParser
 static HashMap* config_parsers;
+// K = char* ， T=ConfigCleaner
+static HashMap* config_cleaners;
 int func_compare(T a,T b) {
     return a==b;
 }
 // key最长32字节
 #define KEY_SIZE 32
 #define VALUE_STR_SIZE 128
-Entry* entry_create(const char* key,T value) {
-    Entry* entry = malloc(sizeof(Entry));
+ConfigValue* entry_create() {
+    ConfigValue* entry = malloc(sizeof(ConfigValue));
     entry->is_cook = 0;
-    entry->key = malloc(KEY_SIZE);
-    strcpy(entry->key,key);
-    entry->value = value;
     return entry;
 }
-void entry_free(Entry*entry) {
-    free(entry->key);
+void entry_free(ConfigValue*entry) {
     free(entry);
 }
-int entry_compare(T value1,T value2) {
-    Entry* e1 = value1;
-    Entry * e2 = value2;
-    return compare_cstr(e1->key,e2->key);
-}
+
 
 ConfigSection* create_section() {
     ConfigSection* sec = malloc(sizeof(ConfigSection));
@@ -79,7 +72,8 @@ void config_register_parser(const char* section,ConfigParser parser) {
 }
 
 void config_register_cleaner(const char* section,ConfigCleaner cleaner) {
-
+    char sec[KEY_SIZE];strcpy(sec,section);
+    hash_map_put(config_cleaners,sec,cleaner);
 }
 
 /**
@@ -88,8 +82,9 @@ void config_register_cleaner(const char* section,ConfigCleaner cleaner) {
  */
 int config_init() {
     config_parsers = hash_map_create(hash_func_str,compare_cstr);
-    configs = hash_map_create(hash_func_str,compare_cstr);
-    return !(configs&&config_parsers);
+    config_cleaners = hash_map_create(hash_func_str,compare_cstr);
+    configs_sections = hash_map_create(hash_func_str,compare_cstr);
+    return !(configs_sections&&config_parsers&&config_cleaners);
 }
 int config_get(const char* section,const char *key,T* value) {
     if (!value) {
@@ -100,10 +95,10 @@ int config_get(const char* section,const char *key,T* value) {
     char sk[KEY_SIZE]; strcpy(sk,section);
     // 获取对应的配置节
     ConfigSection* sec = NULL;
-    if (hash_map_get(configs,k,(T*)&sec))
+    if (hash_map_get(configs_sections,k,(T*)&sec))
         return 1;
     // 获取配置项
-    Entry* entry = NULL;
+    ConfigValue* entry = NULL;
     if (hash_map_get(sec->entries,k,(T*)&entry))
         return 1;
     // 对配置值延迟解析
@@ -127,22 +122,31 @@ int config_get(const char* section,const char *key,T* value) {
 }
 
 int config_set(const char* section,const char *key,T value) {
+    // 配置节
     ConfigSection* sec = NULL;
-    char k[KEY_SIZE]; strcpy(k,key);
-    char sk[KEY_SIZE]; strcpy(sk,section);
-    hash_map_get(configs,k,(T*)&sec);
-    if (!sec) {
+    if (hash_map_get(configs_sections,(T)section,(T*)&sec)) { // 没有
         sec = create_section();
-        hash_map_put(configs,sk,sec);
+        hash_map_put(configs_sections,strdup(section),sec);
     }
 
-    Entry* entry;
-    // 如果有配置值并且是原始字符串
-    if (!hash_map_get(sec->entries,(K)key,(T*)&entry)&&!entry->is_cook)
-            free(entry->value);
-    entry->is_cook = 1;
-    // fixme 旧的解析值怎么办？-->让上层再注册一个配置解析值销毁函数
-    hash_map_put(sec->entries,k,value);
+    ConfigValue* config_value;
+    // 如果有旧的配置值，需要清理
+    if (!hash_map_get(sec->entries,(K)key,(T*)&config_value)&&config_value) {
+        if (config_value->is_cook) {
+            ConfigCleaner cleaner;
+            if (!hash_map_get(config_cleaners,(K)section,(T*)&cleaner))
+                cleaner(key,config_value->value); // 如果没有，1.该配置不需要清理内存所以上层不注册，2.该配置需要清理但上层没注册，不是本层的问题
+        }
+        else free(config_value->value);
+    }
+    else config_value = entry_create();
+
+    config_value->is_cook = 1;
+    config_value->value = value;
+    // put 是幂等的
+    K new_key = strdup(key);
+    if (hash_map_put(sec->entries,new_key,config_value)) // 如果原来已经存有一份相等的key
+        free(new_key);
     return 0;
 }
 /**
@@ -153,23 +157,28 @@ int config_set(const char* section,const char *key,T value) {
 * @return
 */
 int config_inject(const char* section,const char *key,const char* value) {
+    // 配置节
     ConfigSection* sec = NULL;
-    char k[KEY_SIZE]; strcpy(k,key);
-    char sk[KEY_SIZE]; strcpy(sk,section);
-    hash_map_get(configs,k,(T*)&sec);
-    if (!sec) {
+    if (hash_map_get(configs_sections,(T)section,(T*)&sec)) {
         sec = create_section();
-        hash_map_put(configs,sk,sec);
+        hash_map_put(configs_sections,strdup(section),sec); // 显然里面没有key的内存副本
     }
-
-    Entry* entry;
-    if (!hash_map_get(sec->entries,(K)key,(T*)&entry)) {  // 如果有配置值了，
+    // 配置值
+    ConfigValue* config_value;
+    if (!hash_map_get(sec->entries,(K)key,(T*)&config_value)) {  // 如果有配置值了，
         // 释放旧数据
-        if (!entry->is_cook)
-            free(entry->value); // 释放旧的原始字符串
-        //fixme 如果原本有解析值呢？这里就泄漏了。
-    }
-    hash_map_put(sec->entries,k,strdup(value));
+        ConfigCleaner cleaner;
+        if (config_value->is_cook&&!hash_map_get(config_cleaners,(K)section,(T*)&cleaner))
+                cleaner(key,config_value->value);
+        else free(config_value->value);
+    }  // 没有配置值，新建一项
+    else config_value = entry_create();
+
+    config_value->value = strdup(value);
+
+    K new_key = strdup(key);
+    if (hash_map_put(sec->entries,new_key,config_value)) // 如果原来已经存有一份相等的key
+        free(new_key);
     return 0;
 }
 /**

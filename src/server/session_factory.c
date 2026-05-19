@@ -51,14 +51,16 @@ Session * session_get(const DnsPacket* relay_response) {
     hash_map_get(agent_id_sessions,&id,&ses);
     return ses;
 }
-
+void session_id_key_destructor(K key) {
+    // 因为key是纯数字，不是指针，所以不需要释放
+}
 /**
  * 关闭中继请求的会话
  * @param session
  */
  void session_close(Session *session) {
-    K key = &session->relay_info.relay_packet->header.id; // relay_id
-    hash_map_remove(agent_id_sessions,key);
+    K key = (K)session->relay_info.relay_packet->header.id; // relay_id
+    hash_map_remove(agent_id_sessions,key,session_id_key_destructor);
     //可以释放，因为队列里实际上存的是指针而不是会话，
     priority_remove(sessions_queue,session);
     pack_free(session->relay_info.relay_packet);
@@ -118,7 +120,7 @@ int session_open(uint16_t client_id,NetEnd client_ip,const DnsPacket * relay_pac
     session->client_ip = client_ip;
     session->relay_info.retry_times = 0;
     session->relay_info.relay_packet = packet_clone(relay_pack);
-    hash_map_put(agent_id_sessions,&session->relay_info.relay_packet->header.id,session);
+    hash_map_put(agent_id_sessions,(K)session->relay_info.relay_packet->header.id,session);
     session_wait(session);
     return 0;
 }
