@@ -1,7 +1,6 @@
 //
 // Created by yian on 2026/5/10.
 //
-#include <stddef.h>
 #include <threads.h>
 #include "server/daemon.h"
 #include "dns/cache.h"
@@ -16,7 +15,7 @@ int daemon_dnscache_ttl(void*) {
         ex_try();
         thrd_sleep(&time_to_sleep,NULL);
         dns_cache_prune();
-
-        do_log(INFO,"dns cache ttl checked");
+        if (ex_catch())
+            do_log(ERROR,"daemon_cache_ttl :%s",ex_end());
     }
 }

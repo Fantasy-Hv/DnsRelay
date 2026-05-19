@@ -25,8 +25,9 @@
 #endif
 /**
  * 配置项解析器，读入k-v,生成解析后的值
+ * 0解析成功，-1解析失败
  */
-typedef void* (*ConfigParser)(const char* key,const char* value);
+typedef int (*ConfigParser)(const char* key,const char* value,T* result);
 
 /**
  * 为某个节注册配置解析器
@@ -43,23 +44,31 @@ int config_init();
 /**
  * 获取配置属性，如果属性不存在，不应该修改value内容
  * @param key 键
- * @param value 值指针,必须指向一块有效内存,如果配置存在，会将配置的值拷贝到该内存中
- * @return 是否存在该配置，0为存在，1为不存在
+ * @param value 值指针,必须指向一块有效内存,如果配置存在，会将配置的值拷贝到该内存中，否则不会改变内容
+ * @return 是否存在该配置，0为存在，1为不存在,-1解析出错
  */
-int config_get(const char* section,const char *key,void* value);
+int config_get(const char* section,const char *key,T* value);
 
 /**
- *
+ * 以可用形式设置配置值，将来读取时不会解析
  * @param section 配置项所属的节
- * @param key 键
- * @param value 值
+ * @param key 键字符串
+ * @param value 指向值的指针
  * @return
  */
-int config_set(const char* section,const char *key,const void* value);
+int config_set(const char* section,const char *key,T value);/**
+ /**
+  *以原始字符串形式设置配置值，将来读取时会进行解析
+ * @param section 配置项所属的节
+ * @param key 键字符串
+ * @param value 指向值的指针
+ * @return
+ */
+int config_inject(const char* section,const char *key,const char* value);
 /**
  * 加载配置文件
  * @return
  */
-int config_load();
+int config_load_file(const char *);
 
 #endif //DNSRELAY_CONFIG_H

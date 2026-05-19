@@ -2,8 +2,7 @@
 // Created by yian on 2026/5/8.
 //
 #ifdef __linux__
-#include <errno.h>
-
+#include <arpa/inet.h>
 #include "infra/socket.h"
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -141,5 +140,29 @@ int socket_sleep_on(SocketHolder socket_holder,int socket_cnt,ms timeout) {
     if (ret<0)
        ex_throw("syscall select");
     return ret;
+}
+
+ int ipstr2binary(const char * ip_str,NetEnd** res) {
+    NetEnd *result = malloc(sizeof(NetEnd));
+    memset(result, 0, sizeof(NetEnd));
+
+    // inet_pton ：ip字符串转二进制，1解析成功，0格式错误，-1协议族不支持
+    // IPv4
+    if (inet_pton(AF_INET, ip_str, &result->addr.ipv4) == 1) {
+        result->version = IPV4;
+        result->port = htons(53);
+        *res =  result;
+        return 0;
+    }
+
+    // 再尝试 IPv6
+    if (inet_pton(AF_INET6, ip_str, &result->addr.ipv6) == 1) {
+        result->version = IPV6;
+        result->port = htons(53);
+        *res =  result;
+        return 0;
+    }
+    ex_throw("ipstr2binary");
+    return -1;
 }
 #endif

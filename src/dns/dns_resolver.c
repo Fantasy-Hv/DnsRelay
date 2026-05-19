@@ -10,7 +10,8 @@
 #include <string.h>
 #include <netinet/in.h>
 
-#include "infra/sys.h"
+#include "infra/exception.h"
+#include "infra/utils.h"
 #define DNS_REV_BUF_SIZE 1024
 /**
  *目前需要满足的两类需求：
@@ -35,6 +36,7 @@
 
 /**
  * 将人类可读的域名字符串转为dns编码（非指针）
+ * @decrepted 貌似没必要转换～
  * @return
  */
 char *encode_name(const char *) {
@@ -43,6 +45,7 @@ char *encode_name(const char *) {
 
 /**
  * 将dns包的域名字段解析为人类可读的字符串
+ * @decrepted 貌似没必要转换～
  * @return
  */
 char *decode_name(const char *) {
@@ -53,13 +56,13 @@ char *decode_name(const char *) {
 static void header_endian_2h(SectionHeader *section_header) {
     uint16_t *cursor = (uint16_t *) section_header;
     for (int i = 0; i < 6; i++, cursor++)
-        net_to_host_2(cursor);
+        n2h_2(cursor);
 }
 
 static void header_endian_2n(SectionHeader *section_header) {
     uint16_t *cursor = (uint16_t *) section_header;
     for (int i = 0; i < 6; i++, cursor++)
-        host_to_net_2(cursor);
+        h2n_2(cursor);
 }
 
 
@@ -179,11 +182,11 @@ static int question_deserialize(const char *cur_p, SectionQuestion *question) {
     cursor += strlen(question->qname) + 1; //strlen不算\0
     // type
     memcpy(&question->qtype, cursor, 2);
-    net_to_host_2(&question->qtype);
+    n2h_2(&question->qtype);
     cursor += 2;
     //uint16 qclass
     memcpy(&question->qclass, cursor, 2);
-    net_to_host_2(&question->qclass);
+    n2h_2(&question->qclass);
     cursor += 2;
     return cursor - cur_p;
 }
@@ -201,11 +204,11 @@ static int question_serialize(const SectionQuestion* const question, char* cur_p
     cursor += strlen(question->qname) + 1; //strlen不算\0
     // type
     memcpy( cursor,&question->qtype, 2);
-    host_to_net_2((uint16_t*)cursor);
+    h2n_2((uint16_t*)cursor);
     cursor += 2;
     //uint16 qclass
     memcpy( cursor, &question->qclass,2);
-    host_to_net_2((uint16_t*)cursor);
+    h2n_2((uint16_t*)cursor);
     cursor += 2;
     return cursor - cur_p;
 }
@@ -250,15 +253,16 @@ static  int segment_question_deserialize(const char *cur_p, int qc, Vector * con
  * @return offset:该rr的字节长度
  */
 int rr_deserialize(const char *start_p, const char *cur_p, ResourceRecord * const rr) {
+    // cur_p ： 指向下一个待解析的字节
     //name
     if ((*cur_p & 0xc0) == 0xc0) {
         //值为指针，两字节
         uint16_t offset;
         memcpy(&offset, cur_p, 2);
-        net_to_host_2(&offset);
+        n2h_2(&offset);
         offset &= 0x3fff;
-        const char *recur = offset + start_p;
-        rr->name = strdup(recur);
+        const char *reloc = offset + start_p;
+        rr->name = strdup(reloc); // 保留dns域名编码
         cur_p += 2;
     } else {
         rr->name = strdup(cur_p);
@@ -266,22 +270,25 @@ int rr_deserialize(const char *start_p, const char *cur_p, ResourceRecord * cons
     }
     //type
     memcpy(&rr->type, cur_p, 2);
-    net_to_host_2(&rr->type);
+    n2h_2(&rr->type);
     cur_p += 2;
     //class
     memcpy(&rr->class, cur_p, 2);
-    net_to_host_2(&rr->class);
+    n2h_2(&rr->class);
     cur_p += 2;
     // uint32  ttl
     memcpy(&rr->ttl, cur_p, 4);
-    net_to_host_4(&rr->ttl);
+    n2h_4(&rr->ttl);
     cur_p += 4;
     //2B rdata_length
     memcpy(&rr->rdata_length, cur_p, 2);
-    net_to_host_2(&rr->rdata_length);
+    n2h_2(&rr->rdata_length);
     cur_p += 2;
     // rdata
-    return 0;
+    rr->rdata = malloc(rr->rdata_length);
+    memcpy(rr->rdata,cur_p,rr->rdata_length);
+    cur_p+=rr->rdata_length;
+    return cur_p-start_p;
 }
 
 int segment_rr_deserialize(const char *start_p, const char *cur_p, int rrs, Vector * const segment) {
@@ -324,7 +331,7 @@ static int rr_serialize( char *start_p,  char *cur_p,const ResourceRecord * cons
      if (offset < cur_p-start_p) { // 搜索到了
         offset=(offset+sizeof(SectionHeader))|0xC000; //设置高两位1,表示这是压缩指针
         memcpy(cursor,&offset,2);
-        host_to_net_2((uint16_t*)&cursor);
+        h2n_2((uint16_t*)&cursor);
         cursor+=2;
     }else { //前面没有出现，只能保留原串了。
         strcpy(cursor,rr->name);
@@ -332,19 +339,19 @@ static int rr_serialize( char *start_p,  char *cur_p,const ResourceRecord * cons
     }
     //type
     memcpy(cursor,&rr->type,2);
-    host_to_net_2((uint16_t*)&cursor);
+    h2n_2((uint16_t*)&cursor);
     cursor+=2;
     //class
     memcpy(cursor,&rr->class,2);
-    host_to_net_2((uint16_t*)&cursor);
+    h2n_2((uint16_t*)&cursor);
     cursor+=2;
     //ttl
     memcpy(cursor,&rr->ttl,4);
-    host_to_net_4((uint32_t*)&cursor);
+    h2n_4((uint32_t*)&cursor);
     cursor+=4;
     //len
     memcpy(cursor,&rr->rdata_length,2);
-    host_to_net_2((uint16_t*)&cursor);
+    h2n_2((uint16_t*)&cursor);
     cursor+=2;
     // rdata
     memcpy(cursor,rr->rdata,rr->rdata_length);
@@ -397,7 +404,10 @@ int pack_serialize(const DnsPacket *dns_pack, char *const packet_buf) {
  * @return 0-解析成功，-1解析失败
  */
 int pack_deserialize(const char *raw_pack, int len, DnsPacket **packet) {
-    if (len > 512)return -1;
+    if (len > 512) {
+        ex_throw("pack_deser:size exceeded");
+        return -1;
+    }
     const char *cursor = raw_pack;
     DnsPacket *pac = pack_create();
     // header

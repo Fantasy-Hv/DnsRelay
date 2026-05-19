@@ -183,6 +183,14 @@ HashMap * hash_map_create(HashFunction hash_function,Comparator comparator);
  * @param data
  */
 void hash_map_put(HashMap* map,K key,T data);
+
+/**
+ *
+ * @param map
+ * @param key
+ * @param result
+ * @return 0-找到数据，1-没有找到数据
+ */
 int hash_map_get(HashMap* map,K key,T* result);
 void hash_map_remove(HashMap* map,K key);
 #endif //DNSRELAY_STL_H

@@ -3,10 +3,9 @@
 //
 #ifndef DNSRELAY_SOCKET_H
 #define DNSRELAY_SOCKET_H
-#include <stddef.h>
 #include <stdint.h>
 
-#include "sys.h"
+#include "utils.h"
 /**
  * UDP socket 抽象层，对系统调用的简单封装
  */
@@ -28,16 +27,11 @@ typedef struct {
     int port; // 网络序
 }NetEnd;
 
-#ifdef _WIN32
-#include <winsock2.h>
+
 // socket句柄/描述符
-typedef SOCKET SocketHolder;
-#define SYS_INVALID_SOCKET INVALID_SOCKET
-#else
-// socket句柄/描述符
-typedef  int  SocketHolder;;
+typedef  int  SocketHolder;
 #define SYS_INVALID_SOCKET (-1)
-#endif
+
 
 int socket_create(SocketHolder *socket_holder);
 
@@ -80,4 +74,10 @@ int socket_release(SocketHolder socket);
  * @return >0,表示有可读的socket,=0表示超时，<0 错误
  */
 int socket_sleep_on(SocketHolder socket_holder,int socket_cnt,ms timeout);
+
+/**
+ * 根据ip地址的字符串表示构造NetEnd结构体
+ * @return 0成功，-1失败
+ */
+int ipstr2binary(const char *,NetEnd**);
 #endif //DNSRELAY_SOCKET_H

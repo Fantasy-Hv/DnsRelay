@@ -20,13 +20,36 @@
  *
  */
 #ifndef DNSRELAY_EXCEPTION_H
+
 #define DNSRELAY_EXCEPTION_H
-//开启错误捕获，可重入
+/**
+ *用于追踪错误信息
+  三状态的状态机,线程局部
+  close ：未开启错误记录
+  open ： 开启错误记录
+  err : 开启错误记录并且有错误
+  在err状态，catch() = 1
+  其他状态 catch() = 0
+  状态转移：
+  close -> close by end , 重复的调用end会得到""
+  close -> open by try  , 用try开启记录
+  close -> err by throw ， 如果上层没有显式try,下层throw的信息可能不会被消费
+  open  -> open by try ， try是可重入的
+  open  -> err by throw ， 用throw记录错误信息
+  open  -> close by end ， 没有意义
+  err   -> err by throw ， 追加错误的上下文信息
+  err   -> close by end , if(catch()) end;
+  err   -> open by try 。 这样会导致错误信息丢失。
+
+ *
+ */
+//开启错误链捕获，可重入
 void ex_try();
+
 // 用于在错误传播链上添加错误信息,
-void ex_throw(const char* msg);
+void ex_throw(const char* msg_format,...);
 //是否发生了错误
 int ex_catch();
-// 获取上一次错误的调用栈信息,返回只读字符串，不可重入，
+// 获取上一次错误的调用栈信息,返回只读字符串，重复读返回空串""
 const char* ex_end(void);
 #endif //DNSRELAY_EXCEPTION_H

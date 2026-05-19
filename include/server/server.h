@@ -5,9 +5,9 @@
 
 #ifndef DNSRELAY_SERVER_H
 #define DNSRELAY_SERVER_H
-//缓存配置项
-#define KEY_CACHE_SIZE "dns_cache_size"
-#define VALUE_DEFAULT_CACHE_SIZE 1024
+
+#define SERV_SECTION "server"
+
 //端口配置项
 #define KEY_SERVER_PORT "server_port"
 #define VALUE_DEFAULT_SERVER_PORT 53
@@ -20,7 +20,6 @@
 #define VALUE_DEFAULT_MAX_RETRY_TIME 2
 //上游dns服务器ip,多个用逗号隔开
 #define KEY_UPSTREAMS "server_upstream"
-
 
 /**
  * 启动服务器主线程

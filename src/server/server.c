@@ -9,9 +9,12 @@
 #include "server/session.h"
 #include "server/server.h"
 
+#include <stdlib.h>
+#include <string.h>
+
 
 #include "infra/stl.h"
-#include "infra/sys.h"
+#include "infra/utils.h"
 #include "dns/protocol.h"
 #include "dns/id.h"
 #include "server/daemon.h"
@@ -22,7 +25,7 @@ static ms request_timeout = VALUE_DEFAULT_REQUEST_TIMEOUT*1000;
 static int max_retry_time = VALUE_DEFAULT_MAX_RETRY_TIME;
 #define DNS_RECV_BUF_SIZE 1024
 #define DNS_SEND_BUF_SIZE 1024
-#define SERV_SECTION "server"
+
 /**
  * 套接字引用
  */
@@ -107,7 +110,7 @@ static int init_socket() {
          return -1;
      }
     int port;
-    if (config_get(SERV_SECTION,KEY_SERVER_PORT,&port))
+    if (config_get(SERV_SECTION,KEY_SERVER_PORT,(T*)&port))
         port = VALUE_DEFAULT_SERVER_PORT;
     if (socket_bind(socket_holder, port)) {
         ex_throw("init_socket");
@@ -236,7 +239,7 @@ static int server_loop() {
                 int ret = pack_recv(&packet,&source_end); //需要返回值控制
                 if (ret==1)break; // 没有数据了
                 if (ret==-1) { // pack_recv有错误，获取上下文
-                    do_log(ERROR,"server loop err,stacktrace :\n %s",ex_end());
+                    do_log(ERROR,"server loop err: %s",ex_end());
                     break;
                 }
                 // 单个包处理出错对本层控制流无影响，因此不关心返回值也不关心错误，函数自己处理。
@@ -254,16 +257,51 @@ static int server_loop() {
     }
     return -1;
 }
+int server_config_parser(const char* key,const char* value,T* result) {
+    if (strcmp(key,KEY_UPSTREAMS)) {
+        // value是上游列表
+        LinkedList* ups = linked_list_create();
+        const char * cursor = value;
+        if (*cursor == ',')cursor++;
+        char item[64];
+        for (int i = 0; cursor[i] != '\0'; i++) {
+            if (cursor[i]==',') { // i是ip字符串的长度,不含\0
+                memcpy(item,cursor,i);
+                item[i]='\0';
+                NetEnd* end ;
+                if (ipstr2binary(item,&end)) {  // 解析失败
+                    ex_throw("serv_config_parser:upstream failed");
+                    return -1;
+                }
+                linked_list_addFirst(ups,end);
+            }
+            cursor+=i;
+        }
+        *result = ups;
+        return 0;
+    }
+    if (strcmp(key,KEY_MAX_RETRY_TIME)) {
+        *result = (T)atol(value);   // atol : 字符串转long
+        return 0;
+    }
+    if (strcmp(key,KEY_PACKET_TIMEOUT)) {
+        *result = (T)atol(value);
+        return 0;
+    }
+    *result =strdup(value); // 降级为原字符串
+    return 0;
+}
 
 int server_start() {
+    ex_try();
+    config_register_parser(SERV_SECTION,server_config_parser);
     //初始化降级策略配置
-    config_get(SERV_SECTION,KEY_PACKET_TIMEOUT,&request_timeout);
-    config_get(SERV_SECTION,KEY_MAX_RETRY_TIME,&max_retry_time);
+    config_get(SERV_SECTION,KEY_PACKET_TIMEOUT,(T*)&request_timeout);
+    config_get(SERV_SECTION,KEY_MAX_RETRY_TIME,(T*)&max_retry_time);
     //获取上游服务器列表
-    upstreams = linked_list_create();
-    config_get(SERV_SECTION,KEY_UPSTREAMS,upstreams);
+    config_get(SERV_SECTION,KEY_UPSTREAMS,(T*)&upstreams);
     if (linked_list_is_empty(upstreams)) {
-        do_log(ERROR,"server:upstream not configured");
+        do_log(ERROR,"server:upstream not configured %s",ex_end());
         return -1;
     }
     //创建守护线程
