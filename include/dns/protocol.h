@@ -131,7 +131,17 @@ typedef struct {
      */
     Vector* additionals; // 权威域名服务器的ip
 } DnsPacket;
+/*
+ *RR的类型有很多，每种类型的rdata格式、含义也不一样，
+ *但幸运的是本层不需要关心rdata的内容，因为
+ * 考虑RR的生命周期：
+ * 当本地缓存为空时，客户端发来请求报文，如果是非主机状态查询，
+ * 且客户端希望递归，那么只需要替换id直接转发给上游拿RR即可，不需要我们组装RR
+ * 上游响应回来后，以RR为单位放入缓存，下次可以直接根据Question查到对应RR
+ * 全程都不需要解析RR里面的rdata
+*/
 
+//初始化一条RR记录
 ResourceRecord *rr_create();
 
 void rr_free(ResourceRecord *rr);
