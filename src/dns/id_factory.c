@@ -6,7 +6,7 @@
 
 static uint16_t ids[65536];
 static int top;
-static int st[65536];
+static char st[65536];
 
 int id_pool_init() {
     top = 65535;
