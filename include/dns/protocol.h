@@ -97,7 +97,6 @@ typedef enum {
  *  IN    NS        该区域的权威服务器域名，dns域名编码
  *  IN    PTR       用于反向dns解析查询 ，此时name为ip地址，有特殊编码规则，对于PTR记录的query,同样只需要
  *  IN    SOA       较为复杂。。。作为中转服务器貌似没有必要解析
-
  */
 typedef struct {
     char* name; //该记录对应question中的哪个域名，dns域名编码，是字符串(\0)
@@ -132,8 +131,8 @@ typedef struct {
     Vector* additionals; // 权威域名服务器的ip
 } DnsPacket;
 /*
- *RR的类型有很多，每种类型的rdata格式、含义也不一样，
- *但幸运的是本层不需要关心rdata的内容，因为
+ * RR的类型有很多，每种类型的rdata格式、含义也不一样，
+ * 但幸运的是我们不需要关心rdata的内容，因为
  * 考虑RR的生命周期：
  * 当本地缓存为空时，客户端发来请求报文，如果是非主机状态查询，
  * 且客户端希望递归，那么只需要替换id直接转发给上游拿RR即可，不需要我们组装RR

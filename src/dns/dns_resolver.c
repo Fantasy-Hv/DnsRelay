@@ -453,7 +453,7 @@ int packet_is_query(const DnsPacket *packet) {
     return IS_QUERY(packet->header.flags);
 }
 
-/**
+/**todo
  * QR=Q
  * Opcode=Status时调用该方法生成响应包
  * @param query
