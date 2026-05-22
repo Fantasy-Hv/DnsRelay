@@ -16,7 +16,7 @@ static  LogLevel logging_level = INFO; //日志过滤级别
 static FILE* output_channels[LEVEL_NUM] ; // 各级别的输出流
 //日志模块的配置值都是基本类型，因此不用注册配置清理函数
 int log_config_parser(const char* key,const char* value,T* result) {
-    if (strcmp(key,KEY_LOG_LEVEL)) {
+    if (!strcmp(key,KEY_LOG_LEVEL)) {
         LogLevel level = TRACE;
         while (level<LEVEL_NUM&&!strcasecmp(LEVEL_STR[level],value))
             level++;
@@ -37,19 +37,27 @@ int logger_init() {
     output_channels[DEBUG]=stdout; // 调试信息
     output_channels[INFO]=stdout; // 程序运行的关键节点
     output_channels[WARN]=stdout; // 警告，可能会导致错误
-    output_channels[ERROR]=stderr; // 错误
+    output_channels[ERROR]=stdout; // 错误
     return 0;
 }
 
+/**
+* t:11290[D
+
+进程已结束，退出代码为 139 (interrupted by signal 11:SIGSEGV)
+ * @param level
+ * @param format
+ * @param ...
+ */
 void do_log(LogLevel level, const char *format, ...) {
     if (level<logging_level)return;
     FILE* channel = output_channels[level];
     //添加日志时间
-    fprintf( channel,"%ld[%s] ==> \n",sys_time_ms()/1000,LEVEL_STR[level]);
-    //输出日志内容
-    va_list args = {0} ; // 用这个变量指向参数列表
+    fprintf( channel,"t:%ld[%s] ==> \n",sys_time_ms()/1000,LEVEL_STR[level]);
+    //输出日志内容,下面这个是处理变参输出的模板代码
+    va_list args = {0} ; // 用这个变量指向可变参数列表
     va_start(args,format); //初始化
     vfprintf(channel,format,args); // 格式化输出
     va_end(args); // 释放参数列表
-    fprintf(channel,"<==\n");
+    fprintf(channel,"\n");
 }

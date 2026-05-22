@@ -16,15 +16,11 @@ typedef int (*HashFunction)( K key); //计算元素的哈希值
 typedef void (*KeyDestructor)(K key);
 //预定义的计算函数，可供上层选用
 static inline int hash_func_uint16(K key) {
-    return *(uint16_t*)key;
+    return (int)key;
 }
 
 static inline int compare_uint16(T a,T b) {
-    const uint16_t value_a = *(uint16_t*)a;
-    const uint16_t value_b = *(uint16_t*)b;
-    if (value_a > value_b) return 1;
-    if (value_a < value_b) return -1;
-    return 0;
+    return a-b;
 }
 
 static inline int hash_func_str(K key) {

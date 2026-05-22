@@ -2,6 +2,7 @@
 // Created by yian on 2026/5/8.
 //
 #ifdef __linux__
+#include <errno.h>
 #include <arpa/inet.h>
 #include "infra/socket.h"
 #include <sys/socket.h>
@@ -37,7 +38,7 @@ int socket_bind(SocketHolder socket,u_int16_t port) {
 
     int ret = bind(socket,(struct  sockaddr*)&addr,sizeof(struct sockaddr_in6));
     if (ret==-1)
-         ex_throw("syscall bind");
+         ex_throw("syscall bind,errno %d",errno);
     return ret;
 }
 
@@ -78,7 +79,7 @@ int socket_send(SocketHolder socket,const void *buf, size_t buf_len,NetEnd dest)
     int ret;
     ret = sendto(socket, buf, buf_len,SOCK_NONBLOCK, addr, add_len);
     if (ret==-1)
-        ex_throw("syscall sendto");
+        ex_throw("syscall sendto,errno %d",errno);
     free(addr);
     return ret;
 }
@@ -99,7 +100,7 @@ int socket_recv_nowait(SocketHolder socket,void *buf, size_t buf_len, NetEnd *so
     //收包
     rn = recvfrom(socket,buf,buf_len,SOCK_NONBLOCK,(struct sockaddr*)&src,&addrlen);
     if (rn==-1) {
-        ex_throw("syscall recvfrom");
+        ex_throw("syscall recvfrom,errno %d",errno);
         return rn;
     }
     // 拿地址
@@ -133,12 +134,19 @@ int socket_sleep_on(SocketHolder socket_holder,int socket_cnt,ms timeout) {
     fd_set set;
     FD_ZERO(&set);
     FD_SET(socket_holder,&set); // 设置要监听的socket集合
-    struct timeval time = (struct timeval ){timeout/1000,(timeout%1000)*1000}; // 设置超时时间
+    struct  timeval *timeptr;
+    struct timeval time;
+    if (timeout<0)
+        timeptr = NULL;
+    else {
+        time = (struct timeval ){timeout/1000,(timeout%1000)*1000}; // 设置超时时间
+        timeptr = &time;
+    }
     // 监听事件
-    int ret =  select(socket_holder+1,&set,NULL,NULL,&time);
+    int ret =  select(socket_holder+1,&set,NULL,NULL,timeptr);
     // 错误记录
     if (ret<0)
-       ex_throw("syscall select");
+       ex_throw("syscall select,errno %d",errno);
     return ret;
 }
 

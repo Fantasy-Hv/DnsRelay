@@ -95,7 +95,7 @@ int config_get(const char* section,const char *key,T* value) {
     char sk[KEY_SIZE]; strcpy(sk,section);
     // 获取对应的配置节
     ConfigSection* sec = NULL;
-    if (hash_map_get(configs_sections,k,(T*)&sec))
+    if (hash_map_get(configs_sections,sk,(T*)&sec))
         return 1;
     // 获取配置项
     ConfigValue* entry = NULL;
@@ -175,7 +175,7 @@ int config_inject(const char* section,const char *key,const char* value) {
     else config_value = entry_create();
 
     config_value->value = strdup(value);
-
+//0x555555591c30
     K new_key = strdup(key);
     if (hash_map_put(sec->entries,new_key,config_value)) // 如果原来已经存有一份相等的key
         free(new_key);

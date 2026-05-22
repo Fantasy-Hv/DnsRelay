@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "infra/logger.h"
 #include "server/session.h"
 #include "infra/stl.h"
 #include "infra/socket.h"
@@ -48,7 +49,8 @@ Session * session_get(const DnsPacket* relay_response) {
     if (!relay_response)return NULL;
     uint16_t id = relay_response->header.id;
     T ses ;
-    hash_map_get(agent_id_sessions,&id,&ses);
+    if (hash_map_get(agent_id_sessions,(K)id,&ses))
+        return NULL;
     return ses;
 }
 void session_id_key_destructor(K key) {
@@ -59,6 +61,7 @@ void session_id_key_destructor(K key) {
  * @param session
  */
  void session_close(Session *session) {
+    do_log(DEBUG,"ses close for cli-%d,reid-%d",session->client_id,session->relay_info.relay_packet->header.id);
     K key = (K)session->relay_info.relay_packet->header.id; // relay_id
     hash_map_remove(agent_id_sessions,key,session_id_key_destructor);
     //可以释放，因为队列里实际上存的是指针而不是会话，
@@ -116,6 +119,7 @@ int session_wait(Session *session){
  */
 int session_open(uint16_t client_id,NetEnd client_ip,const DnsPacket * relay_pack) {
     Session* session = malloc(sizeof(Session));
+    do_log(DEBUG,"sesionopen for cli-%d,reid-%d",client_id,relay_pack->header.id);
     session->client_id = client_id;
     session->client_ip = client_ip;
     session->relay_info.retry_times = 0;

@@ -198,39 +198,39 @@ static int dns_cache_prune_locked(void) {
  */
 int dns_cache_init() {
     if (g_cache != NULL) {
-        return 1;
+        return 0;
     }
 
     DnsCache *cache = malloc(sizeof(DnsCache));
     if (cache == NULL) {
-        return 0;
+        return 1;
     }
 
     cache->table = hash_map_create(hash_func_str, compare_cstr);
     if (cache->table == NULL) {
         free(cache);
-        return 0;
+        return 1;
     }
 
     cache->entries = linked_list_create();
     if (cache->entries == NULL) {
         hash_map_free(cache->table);
         free(cache);
-        return 0;
+        return 1;
     }
 
     if (mtx_init(&cache->lock, mtx_plain) != thrd_success) {
         linked_list_free(cache->entries);
         hash_map_free(cache->table);
         free(cache);
-        return 0;
+        return 1;
     }
 
     cache->size = 0;
     cache->capacity = DNS_CACHE_DEFAULT_CAPACITY;
     // 全局单例入口，后续 put/get/prune/free 都通过它访问同一份缓存状态。
     g_cache = cache;
-    return 1;
+    return 0;
 }
 
 

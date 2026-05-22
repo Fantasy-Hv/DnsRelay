@@ -75,8 +75,8 @@ int packet_send(const DnsPacket* dns_pack,const NetEnd* dest) {
         return -1;
     }
 
-   const int raw_pack_size = pack_serialize(dns_pack,send_buf);
-    if (raw_pack_size<0)
+   const int raw_pack_size = pack_serialize(dns_pack,send_buf,DNS_SEND_BUF_SIZE);
+    if (raw_pack_size<0||raw_pack_size>MAX_PACKET_SIZE)
         return -1;
     do_log(DEBUG,"pac_seri_size %d",raw_pack_size);
 
@@ -166,6 +166,8 @@ static void batch_timeout() {
 static void handle_dns_packet(const DnsPacket *packet_in, NetEnd source_end) {
     DnsPacket *packet_out; // 临时数据包
     ex_try(); // 这里的错误不需要向上传递，自己处理
+    // do_log(DEBUG,"recv pack :",packet_to_log_string(packet_in));
+    // do_log(DEBUG,packet_to_log_string(packet_in));
     if (packet_is_query(packet_in)) {
         //请求包
         PacketDirection direction = pack_make_response_local(packet_in, &packet_out);
@@ -177,7 +179,7 @@ static void handle_dns_packet(const DnsPacket *packet_in, NetEnd source_end) {
         else {
             //构造中继包，申请id
             uint16_t relay_id;
-            if (!id_alloc(&relay_id)) { // 没有id了，返回失败响应
+            if (id_alloc(&relay_id)) { // 没有id了，返回失败响应
                 do_log(WARN, "server : relay id exhausted,resp fallback");
                 pack_make_inner_error(packet_in,&packet_out);
                 packet_send(packet_out,&source_end);
@@ -258,33 +260,37 @@ static int server_loop() {
     return -1;
 }
 int server_config_parser(const char* key,const char* value,T* result) {
-    if (strcmp(key,KEY_UPSTREAMS)) {
+    if (!strcmp(key,KEY_UPSTREAMS)) {
         // value是上游列表
+        int vl = strlen(value);
+        if (vl++==0) return 0;
         LinkedList* ups = linked_list_create();
-        const char * cursor = value;
-        if (*cursor == ',')cursor++;
+        int i=0,j = 0; // i指向第一个有效字符，j指向最后一个字符，ip字符串[i,j)
+        if (value[j] == ',')i=++j;
         char item[64];
-        for (int i = 0; cursor[i] != '\0'; i++) {
-            if (cursor[i]==',') { // i是ip字符串的长度,不含\0
-                memcpy(item,cursor,i);
-                item[i]='\0';
+        for (; j<vl; j++) {
+            // ,10.2.3.9\0第一个，被跳过，后面就没有了
+            if (value[j]==','||value[j]=='\0') { // i是ip字符串的长度,不含\0
+                memcpy(item,&value[i],j-i);
+                item[j-i]='\0';
                 NetEnd* end ;
                 if (ipstr2binary(item,&end)) {  // 解析失败
                     ex_throw("serv_config_parser:upstream failed");
                     return -1;
                 }
                 linked_list_addFirst(ups,end);
+                i=j+1;
             }
-            cursor+=i;
+            // i=j+1;
         }
         *result = ups;
         return 0;
     }
-    if (strcmp(key,KEY_MAX_RETRY_TIME)) {
+    if (!strcmp(key,KEY_MAX_RETRY_TIME)) {
         *result = (T)atol(value);   // atol : 字符串转long
         return 0;
     }
-    if (strcmp(key,KEY_PACKET_TIMEOUT)) {
+    if (!strcmp(key,KEY_PACKET_TIMEOUT)) {
         *result = (T)atol(value);
         return 0;
     }
@@ -298,7 +304,7 @@ int server_config_parser(const char* key,const char* value,T* result) {
  * @param value
  */
 void server_config_cleaner(const char * key,T value) {
-    if (strcmp(key,KEY_UPSTREAMS)) {
+    if (!strcmp(key,KEY_UPSTREAMS)) {
         LinkedList * ups = value;
         linked_list_foreach(ups,sock_config_free_netend);
     }
@@ -313,15 +319,15 @@ int server_start() {
     config_get(SERV_SECTION,KEY_PACKET_TIMEOUT,(T*)&request_timeout);
     config_get(SERV_SECTION,KEY_MAX_RETRY_TIME,(T*)&max_retry_time);
     //获取上游服务器列表
-    config_get(SERV_SECTION,KEY_UPSTREAMS,(T*)&upstreams);
+    config_get(SERV_SECTION,KEY_UPSTREAMS,(T*)&upstreams); //
     if (linked_list_is_empty(upstreams)) {
         do_log(ERROR,"server:upstream not configured %s",ex_end());
         return -1;
     }
     //创建守护线程
-    thrd_t cache_ttl;
-    thrd_create(&cache_ttl,daemon_dnscache_ttl,NULL);
-    thrd_detach(cache_ttl);
+    // thrd_t cache_ttl;
+    // thrd_create(&cache_ttl,daemon_dnscache_ttl,NULL);
+    // thrd_detach(cache_ttl);
     //初始化socket
     ex_try();
     if (init_socket()) {
@@ -329,6 +335,8 @@ int server_start() {
         return -1;
     }
     //进入主循环,处理请求
+    recv_buf = malloc(DNS_RECV_BUF_SIZE);
+    send_buf = malloc(DNS_SEND_BUF_SIZE);
     return server_loop();
 }
 

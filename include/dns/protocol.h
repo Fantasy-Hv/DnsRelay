@@ -224,5 +224,6 @@ int pack_deserialize(const char* raw_pack,int len,DnsPacket** packet) ;
  * @param packet_buf 序列化缓冲区，必须预先分配足够的内存！
  * @return 序列化后的dns包大小，异常返回-1
  */
-int pack_serialize(const DnsPacket* dns_pack,char*  packet_buf);
+int pack_serialize(const DnsPacket* dns_pack,char*  packet_buf,int buf_size);
+
 #endif //DNSRELAY_PROTOCOL_H

@@ -256,7 +256,13 @@ void linked_list_remove(LinkedList* list,T data,Comparator comparator) {
 int linked_list_is_empty(LinkedList* list) {
     return list == NULL || list->size == 0;
 }
+void linked_list_foreach(LinkedList * list,void (*consumer)(T value)) {
+    if (list==NULL||consumer==NULL)return;
 
+    for (LinkedNode *node = list->head;node!=NULL;node = node->next)
+        consumer(node->data);
+
+}
 void linked_list_clear(LinkedList*list) {
     if (list == NULL) {
         return;

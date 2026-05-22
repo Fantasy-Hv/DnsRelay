@@ -32,7 +32,7 @@ void ex_throw(const char* format,...) {
     // 格式化字符串
     va_list args = {0} ; // 用这个变量指向参数列表
     va_start(args,format); //初始化
-    sprintf(at,format,args);
+    vsprintf(at,format,args);
     va_end(args); // 释放参数列表
     // 写入错误信息栈
     int net_r = stack_top-strlen(at);
