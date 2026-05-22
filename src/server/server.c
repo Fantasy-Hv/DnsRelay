@@ -325,9 +325,9 @@ int server_start() {
         return -1;
     }
     //创建守护线程
-    // thrd_t cache_ttl;
-    // thrd_create(&cache_ttl,daemon_dnscache_ttl,NULL);
-    // thrd_detach(cache_ttl);
+    thrd_t cache_ttl;
+    thrd_create(&cache_ttl,daemon_dnscache_ttl,NULL);
+    thrd_detach(cache_ttl);
     //初始化socket
     ex_try();
     if (init_socket()) {

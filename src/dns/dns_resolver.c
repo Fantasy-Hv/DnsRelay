@@ -392,7 +392,7 @@ static int segment_rr_serialize(Vector * const segment,int cnt,char *start_p,  c
  * @return 序列化后的dns包大小，异常返回-1,
  */
 int pack_serialize(const DnsPacket *dns_pack, char *const packet_buf,int buf_size) {
-    do_log(DEBUG,"pack to seri : %s",packet_to_log_string(dns_pack));
+    do_log(TRACE,"pack to seri : %s",packet_to_log_string(dns_pack));
     char *cursor = packet_buf;
     // header
     memcpy(cursor, &dns_pack->header, sizeof(SectionHeader));
@@ -437,7 +437,7 @@ int pack_deserialize(const char *raw_pack, int len, DnsPacket **packet) {
         ex_throw("pack_deser:size exceeded");
         return -1;
     }
-    do_log(DEBUG,"raw pack size %d",len);
+    do_log(TRACE,"raw pack size %d",len);
     const char *cursor = raw_pack;
     DnsPacket *pac = pack_create();
     // header
