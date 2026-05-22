@@ -652,9 +652,9 @@ void hash_map_free(HashMap* map) {
 }
 
 
-void hash_map_put(HashMap* map,K key,T data) {
+int hash_map_put(HashMap* map,K key,T data) {
     if (map == NULL || key == NULL) {
-        return;
+        return 1;
     }
 
     // 先定位桶，再在桶里查是“更新旧值”还是“追加新 entry”。
@@ -665,12 +665,12 @@ void hash_map_put(HashMap* map,K key,T data) {
     if (node != NULL) {
         HashMapEntry *entry = node->data;
         entry->data = data;
-        return;
+        return 1;
     }
 
     HashMapEntry *entry = hash_map_entry_create(key, data);
     if (entry == NULL) {
-        return;
+        return 1;
     }
     linked_list_addLast(bucket, entry);
     map->size++;
@@ -680,6 +680,7 @@ void hash_map_put(HashMap* map,K key,T data) {
     if ((float) map->size > threshold) {
         hash_map_resize(map, bucket_count * 2);
     }
+    return 0;
 }
 
 int hash_map_get(HashMap* map,K key,T* result) {
@@ -701,7 +702,7 @@ int hash_map_get(HashMap* map,K key,T* result) {
     return 0;
 }
 
-void hash_map_remove(HashMap* map,K key) {
+void hash_map_remove(HashMap* map,K key,KeyDestructor destructor) {
     if (map == NULL || key == NULL) {
         return;
     }
@@ -725,6 +726,9 @@ void hash_map_remove(HashMap* map,K key) {
         node->next->prev = node->prev;
     } else {
         bucket->tail = node->prev;
+    }
+    if (destructor != NULL) {
+        destructor(entry->key);
     }
     free(entry);
     free(node);
