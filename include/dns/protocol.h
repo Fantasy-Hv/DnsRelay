@@ -143,6 +143,19 @@ typedef struct {
 //初始化一条RR记录
 ResourceRecord *rr_create();
 
+/**
+ * 根据ip映射配置项生成RR记录，以0.0.0.0=www.bilibili.com为例
+ * type=A|AAAA 。
+ * name = "www.bilibili.com"
+ * data -> "0.0.0.0"
+ * 该函数根据这些值构造RR记录返回
+ * @param name rr的域名字段，原始字符串，如"www.baidu.com"
+ * @param ttl rr的过期时间
+ * @param type
+ * @param data rr的数据，但是原始配置值
+ * @return
+ */
+ResourceRecord* rr_make_from_config_pair(const char * name,uint32_t ttl,Qtype type,const char* data);
 void rr_free(ResourceRecord *rr);
 /**
  *

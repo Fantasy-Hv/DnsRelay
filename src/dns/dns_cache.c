@@ -10,7 +10,18 @@
 #include <threads.h>
 
 #include "infra/utils.h"
-
+/**
+ *todo 还剩下一个功能——预先的ip-域名映射表
+ * 可以使用配置文件
+ * 例如
+ * [cache]
+ * # this is banned domain list
+ * 0.0.0.0 = www.bilibili.com,www.github.com
+ * # this is consistent cache
+ * 20.3.5.3 = www.baidu.com,(c)a.shangfor.com
+ * 像后面那个，如果一个ip对应多个域名，如果知道cname可以用一些自己约定的标记区分。当然完全不管cname也可以。
+根据配置文件读出来的这些键和值构造RR并设置永不过期,放到缓存中即可
+ */
 /**
  * 单条缓存项。
  * 一个缓存项对应一个查询三元组：
