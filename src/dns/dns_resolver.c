@@ -646,10 +646,13 @@ PacketDirection pack_make_response_local(const DnsPacket *query, DnsPacket **res
             }
             // 现在才真正开始回答
             //查看缓存
+
             Vector *ansRR = vector_create(5);
             SectionQuestion *q = vector_get(query->questions, 0);
+            do_log(INFO,"id %d,qname: [%s]",query->header.id,q->qname);
             if (dns_cache_get(q->qname, q->qtype, q->qclass, ansRR)) {
                 // 缓存没有，看Rd
+                do_log(DEBUG,"cache miss");
                 vector_free(ansRR);
                 if (RD_GET(query->header.flags))
                     return UPSTREAM;
@@ -666,12 +669,15 @@ PacketDirection pack_make_response_local(const DnsPacket *query, DnsPacket **res
                 pack_free(*response);
                 make_response_fail(query,response,code);
             }
+            do_log(DEBUG,"cache hit");
             break;
 
         case IQUERY:
+            do_log(DEBUG,"iquery recv");
             make_response_fail(query,response,RCODE_NOTIMP);
             break;
         case STATUS:
+            do_log(DEBUG,"status query recv");
             make_response_status(query,response);
             break;
         default: make_response_empty(query,response);

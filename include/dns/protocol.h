@@ -74,9 +74,14 @@ typedef struct {
 typedef enum { // 不要随意更改顺序
     QTYPE_A = 1, // IPv4 地址
     QTYPE_NS, //权威名称服务器，用于auth段中
-    QTYPE_CNAME = 5, //域名的规范名称 用于answer段
+    QTYPE_MD,
+    QTYPE_MF,
+    QTYPE_CNAME , //域名的规范名称 用于answer段
     QTYPE_SOA,//授权区域起始
-    QTYPE_NULL=9,//空资源记录 (实验性)
+    QTYPE_MB,
+    QTYPE_MG,
+    QTYPE_MR,
+    QTYPE_NULL,//空资源记录 (实验性)
     QTYPE_WKS,//知名服务描述
     QTYPE_PTR,//域名指针 (用于反向解析)
     QTYPE_HINFO,//主机信息 (CPU和操作系统) 用于opcode=status的answer段
