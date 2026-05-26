@@ -795,7 +795,7 @@ char *packet_to_log_string(const DnsPacket *dns_pack) {
     remaining -= written;
 
     // Question 段数量
-    written = snprintf(cursor, remaining, "Qdcnt=%u Ans_RRs=%u auth_RRs=%u Addtion_RRs =%u | ",
+    written = snprintf(cursor, remaining, "Qdcnt=%u Ans_RRs=%u auth_RRs=%u Addtion_RRs =%u \n ",
                        dns_pack->header.qcount,
                        dns_pack->header.answer_RRs,
                        dns_pack->header.authority_RRs,
