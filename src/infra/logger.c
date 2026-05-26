@@ -53,7 +53,7 @@ void do_log(LogLevel level, const char *format, ...) {
     if (level<logging_level)return;
     FILE* channel = output_channels[level];
     //添加日志时间
-    fprintf( channel,"t:%ld[%s] ==> \n",sys_time_ms()/1000,LEVEL_STR[level]);
+    fprintf( channel,"t:%ld [%s] ",sys_time_ms()/1000,LEVEL_STR[level]);
     //输出日志内容,下面这个是处理变参输出的模板代码
     va_list args = {0} ; // 用这个变量指向可变参数列表
     va_start(args,format); //初始化
