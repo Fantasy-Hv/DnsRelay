@@ -4,6 +4,8 @@
 // 需要线程安全的实现，使用 <threads.h>
 #include "dns/cache.h"
 
+#include <arpa/inet.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -54,6 +56,8 @@ typedef struct {
 
 static DnsCache *g_cache;
 #define DNS_CACHE_DEFAULT_CAPACITY 1024
+#define DNS_CACHE_PRELOAD_FILE "./dnsrelay.txt"
+#define DNS_CACHE_PRELOAD_TTL UINT32_MAX
 
 // 链表删除时只需要判断“是不是同一个对象指针”。
 static int ptr_compare(T a, T b) {
@@ -203,6 +207,144 @@ static int dns_cache_prune_locked(void) {
     return 0;
 }
 
+static char *trim_space(char *text) {
+    if (text == NULL) {
+        return NULL;
+    }
+
+    while (isspace((unsigned char)*text)) {
+        text++;
+    }
+
+    char *end = text + strlen(text);
+    while (end > text && isspace((unsigned char)end[-1])) {
+        end--;
+    }
+    *end = '\0';
+    return text;
+}
+
+static void strip_inline_comment(char *line) {
+    if (line == NULL) {
+        return;
+    }
+
+    char *comment = strchr(line, '#');
+    if (comment != NULL) {
+        *comment = '\0';
+    }
+}
+
+static Qtype ip_text_to_qtype(const char *ip_text) {
+    struct in_addr addr4;
+    if (inet_pton(AF_INET, ip_text, &addr4) == 1) {
+        return QTYPE_A;
+    }
+
+    struct in6_addr addr6;
+    if (inet_pton(AF_INET6, ip_text, &addr6) == 1) {
+        return QTYPE_AAAA;
+    }
+    return 0;
+}
+
+static int preload_rr(const char *name, const char *data, Qtype type) {
+    ResourceRecord *rr = rr_make_from_config_pair(name, DNS_CACHE_PRELOAD_TTL, type, data);
+    if (rr == NULL) {
+        return 1;
+    }
+
+    int ret = dns_cache_put(rr);
+    rr_free(rr);
+    return ret;
+}
+
+static int dns_cache_preload_line(const char *ip_text, char *domains_text) {
+    Qtype type = ip_text_to_qtype(ip_text);
+    if (type == 0) {
+        return 1;
+    }
+
+    char *saveptr = NULL;
+    char *token = strtok_r(domains_text, ",", &saveptr);
+    char *canonical_name = NULL;
+    int load_err = 0;
+    while (token != NULL) {
+        char *item = trim_space(token);
+        if (*item != '\0') {
+            if (!strncmp(item, "(c)", 3)) {
+                char *alias_name = trim_space(item + 3);
+                if (*alias_name != '\0' && canonical_name != NULL) {
+                    if (preload_rr(alias_name, canonical_name, QTYPE_CNAME)) {
+                        load_err = 1;
+                    }
+                }
+            } else {
+                if (canonical_name == NULL) {
+                    canonical_name = item;
+                }
+                if (preload_rr(item, ip_text, type)) {
+                    load_err = 1;
+                }
+            }
+        }
+        token = strtok_r(NULL, ",", &saveptr);
+    }
+    return load_err;
+}
+
+static int dns_cache_preload_from_file(const char *filepath) {
+    FILE *fd = fopen(filepath, "r");
+    if (fd == NULL) {
+        return 1;
+    }
+
+    char line[512];
+    int in_cache_section = 0;
+    int has_error = 0;
+    while (fgets(line, sizeof(line), fd)) {
+        strip_inline_comment(line);
+        char *content = trim_space(line);
+        if (*content == '\0') {
+            continue;
+        }
+
+        if (*content == '[') {
+            char *right = strchr(content, ']');
+            if (right == NULL) {
+                continue;
+            }
+            *right = '\0';
+            char *section = trim_space(content + 1);
+            in_cache_section = !strcmp(section, "cache");
+            continue;
+        }
+
+        if (!in_cache_section) {
+            continue;
+        }
+
+        char *equal = strchr(content, '=');
+        if (equal == NULL) {
+            continue;
+        }
+
+        *equal = '\0';
+        char *ip_text = trim_space(content);
+        char *domains_text = trim_space(equal + 1);
+        if (*ip_text == '\0' || *domains_text == '\0') {
+            continue;
+        }
+
+        if (dns_cache_preload_line(ip_text, domains_text)) {
+            has_error = 1;
+        }
+    }
+
+    fclose(fd);
+    return has_error;
+}
+
 /**
  * 缓存初始化,main会调用
  * @return
@@ -241,6 +383,7 @@ int dns_cache_init() {
     cache->capacity = DNS_CACHE_DEFAULT_CAPACITY;
     // 全局单例入口，后续 put/get/prune/free 都通过它访问同一份缓存状态。
     g_cache = cache;
+    dns_cache_preload_from_file(DNS_CACHE_PRELOAD_FILE);
     return 0;
 }
 

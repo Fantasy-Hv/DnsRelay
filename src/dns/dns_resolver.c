@@ -9,6 +9,7 @@
 
 #include "dns/protocol.h"
 #include "dns/cache.h"
+#include <arpa/inet.h>
 #include <stdlib.h>
 #include <string.h>
 #include <netinet/in.h>
@@ -75,6 +76,116 @@ ResourceRecord *rr_create() {
     rr->name = rr->rdata = NULL;
     rr->rdata_length = 0;
     return rr;
+}
+
+static char *dns_name_from_text(const char *name) {
+    if (name == NULL || *name == '\0') {
+        return NULL;
+    }
+
+    size_t input_len = strlen(name);
+    while (input_len > 0 && name[input_len - 1] == '.') {
+        input_len--;
+    }
+    if (input_len == 0) {
+        return NULL;
+    }
+
+    char *encoded = malloc(input_len + 2);
+    if (encoded == NULL) {
+        return NULL;
+    }
+
+    size_t src = 0;
+    size_t dst = 0;
+    while (src < input_len) {
+        size_t label_start = src;
+        while (src < input_len && name[src] != '.') {
+            src++;
+        }
+
+        size_t label_len = src - label_start;
+        if (label_len == 0 || label_len > 63) {
+            free(encoded);
+            return NULL;
+        }
+
+        encoded[dst++] = (char)label_len;
+        memcpy(encoded + dst, name + label_start, label_len);
+        dst += label_len;
+
+        if (src < input_len && name[src] == '.') {
+            src++;
+        }
+    }
+
+    encoded[dst++] = '\0';
+    return encoded;
+}
+
+ResourceRecord* rr_make_from_config_pair(const char *name, uint32_t ttl, Qtype type, const char* data) {
+    if (name == NULL || data == NULL) {
+        return NULL;
+    }
+
+    ResourceRecord *rr = rr_create();
+    if (rr == NULL) {
+        return NULL;
+    }
+
+    rr->name = dns_name_from_text(name);
+    rr->type = type;
+    rr->class = QCLASS_IN;
+    rr->ttl = ttl;
+    if (rr->name == NULL) {
+        rr_free(rr);
+        return NULL;
+    }
+
+    switch (type) {
+        case QTYPE_A: {
+            struct in_addr addr4;
+            if (inet_pton(AF_INET, data, &addr4) != 1) {
+                rr_free(rr);
+                return NULL;
+            }
+            rr->rdata_length = sizeof(addr4);
+            rr->rdata = malloc(rr->rdata_length);
+            if (rr->rdata == NULL) {
+                rr_free(rr);
+                return NULL;
+            }
+            memcpy(rr->rdata, &addr4, rr->rdata_length);
+            return rr;
+        }
+        case QTYPE_AAAA: {
+            struct in6_addr addr6;
+            if (inet_pton(AF_INET6, data, &addr6) != 1) {
+                rr_free(rr);
+                return NULL;
+            }
+            rr->rdata_length = sizeof(addr6);
+            rr->rdata = malloc(rr->rdata_length);
+            if (rr->rdata == NULL) {
+                rr_free(rr);
+                return NULL;
+            }
+            memcpy(rr->rdata, &addr6, rr->rdata_length);
+            return rr;
+        }
+        case QTYPE_CNAME: {
+            rr->rdata = dns_name_from_text(data);
+            if (rr->rdata == NULL) {
+                rr_free(rr);
+                return NULL;
+            }
+            rr->rdata_length = (uint16_t)(strlen(rr->rdata) + 1);
+            return rr;
+        }
+        default:
+            rr_free(rr);
+            return NULL;
+    }
 }
 
 void rr_free(ResourceRecord *rr) {
@@ -918,4 +1029,3 @@ char *packet_to_log_string(const DnsPacket *dns_pack) {
     log_buf[sizeof(log_buf) - 1] = '\0';
     return log_buf;
 }
-
