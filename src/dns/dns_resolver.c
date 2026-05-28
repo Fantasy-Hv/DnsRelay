@@ -792,12 +792,9 @@ int pack_make_query_relay(const DnsPacket *query_pack, uint16_t relay_id, DnsPac
 void pack_make_response_relay(const DnsPacket *recv, DnsPacket **send, uint16_t client_id) {
     *send = packet_clone(recv);
     (*send)->header.id = client_id;
-    Vector *rrs = recv->answers;
-    // 缓存资源记录
-    for (int i = 0; i < vector_size(rrs); i++) {
-        ResourceRecord *rr = vector_get(rrs, i);
-        if (rr->ttl > 0)
-            dns_cache_put(rr);
+    if (recv->header.qcount > 0 && vector_size(recv->questions) > 0 && vector_size(recv->answers) > 0) {
+        SectionQuestion *question = vector_get(recv->questions, 0);
+        dns_cache_put_answer_set(question, recv->answers);
     }
 }
 

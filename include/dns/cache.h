@@ -25,6 +25,15 @@ int dns_cache_init();
 int dns_cache_put(const ResourceRecord * record);
 
 /**
+ * 按问题三元组缓存一整组回答。
+ * 这是真正的主缓存接口，用于缓存一次查询对应的完整 answer 集合。
+ * @param question 查询问题
+ * @param records 回答RR列表，元素类型 T = ResourceRecord*
+ * @return 0-缓存成功 1-缓存失败
+ */
+int dns_cache_put_answer_set(const SectionQuestion *question, Vector *records);
+
+/**
  * 根据name和type查询对应的RR
  * @param name RR的name
  * @param type RR类型
