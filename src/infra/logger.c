@@ -4,9 +4,11 @@
 //
 #include "infra/logger.h"
 
+#include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "infra/config.h"
 #include "infra/utils.h"
@@ -18,7 +20,7 @@ static FILE* output_channels[LEVEL_NUM] ; // 各级别的输出流
 int log_config_parser(const char* key,const char* value,T* result) {
     if (!strcmp(key,KEY_LOG_LEVEL)) {
         LogLevel level = TRACE;
-        while (level<LEVEL_NUM&&!strcasecmp(LEVEL_STR[level],value))
+        while (level<LEVEL_NUM&&strcasecmp(LEVEL_STR[level],value)!=0)
             level++;
         if (level<LEVEL_NUM) {
             *result = (T)level;
@@ -27,17 +29,31 @@ int log_config_parser(const char* key,const char* value,T* result) {
         *result = (T)INFO;
         return 0;
     }
+    for (int i=TRACE;i<LEVEL_NUM;i++) {
+        if (strcasecmp(LEVEL_STR[i],key)==0) {
+            if (strcasecmp(value,"stdout")==0)
+                *result = stdout;
+            else if (strcasecmp(value,"stderr")==0)
+                *result = stderr;
+            else {
+                FILE* out= fopen(value,"a");
+                if (out==NULL) {
+                    printf("ERROR: log file %s open failed %d,check config\n",value,errno);
+                    *result = stdout;
+                }else *result = out;
+            }
+        }
+    }
     return 0;
 }
 
 int logger_init() {
     config_register_parser(LOG_SECTION,log_config_parser);
     config_get(LOG_SECTION,KEY_LOG_LEVEL, (T*)&logging_level);
-    output_channels[TRACE]=stdout; // 跟踪程序运行
-    output_channels[DEBUG]=stdout; // 调试信息
-    output_channels[INFO]=stdout; // 程序运行的关键节点
-    output_channels[WARN]=stdout; // 警告，可能会导致错误
-    output_channels[ERROR]=stdout; // 错误
+   for (int i = logging_level;i<LEVEL_NUM;i++) {
+       output_channels[i]=stdout;
+       config_get(LOG_SECTION,LEVEL_STR[i],(T*)&output_channels[i]);
+   }
     return 0;
 }
 
@@ -60,4 +76,5 @@ void do_log(LogLevel level, const char *format, ...) {
     vfprintf(channel,format,args); // 格式化输出
     va_end(args); // 释放参数列表
     fprintf(channel,"\n");
+    fflush(channel);
 }

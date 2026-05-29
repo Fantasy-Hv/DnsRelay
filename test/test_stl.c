@@ -145,7 +145,13 @@ static void test_hash_map_put_get(void) {
     TEST("hash_map put / get");
     HashMap *map = hash_map_create(hash_func_str, compare_cstr);
     ASSERT_NOT_NULL(map);
-
+    int c=0;
+    hash_map_put(map,"server",(T)1);
+    ASSERT_EQ(hash_map_get(map,"server",(T*)&c),0);
+    ASSERT_EQ(c,1);
+    c=0;
+    ASSERT_EQ(hash_map_get(map,"log",(T*)&c),1);
+    ASSERT_EQ(c,0);
     int a = 42, b = 99;
     hash_map_put(map, "answer", &a);
     hash_map_put(map, "other", &b);

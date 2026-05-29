@@ -291,7 +291,7 @@ int server_config_parser(const char* key,const char* value,T* result) {
         return 0;
     }
     if (!strcmp(key,KEY_PACKET_TIMEOUT)) {
-        *result = (T)atol(value);
+        *result = (T)(atol(value)*1000);
         return 0;
     }
     // 降级为原字符串

@@ -8,7 +8,7 @@
 #include "dns/id.h"
 #include "infra/logger.h"
 #include "server/session.h"
-char * config_file = "./dnsrelay.txt";
+char * config_file = "./dnsrelay.conf";
 void print_help() {
     printf("usage:\n");
     printf("-c <config_file_path>\n");

@@ -12,7 +12,7 @@
 // }LogOutput;
 #define LOG_SECTION "log"
 typedef enum {
-     TRACE,DEBUG,INFO,WARN,ERROR
+     TRACE=0,DEBUG,INFO,WARN,ERROR
 }LogLevel;
 
 int logger_init();
