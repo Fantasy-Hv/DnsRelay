@@ -1,8 +1,5 @@
 //
 // Created by yian on 2026/5/9.
-/*
- *目前想不到简单通用的配置文件解析方法
-*/
 //
 #include <ctype.h>
 #include <stdlib.h>

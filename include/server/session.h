@@ -69,5 +69,4 @@ int session_wait(Session* session) ;
  * */
 int get_session_timeout_remain(const Session *session,ms timeout,ms* timeval) ;
 
-char* session_to_log_str(const Session *session);
 #endif //DNSRELAY_SESSION_H

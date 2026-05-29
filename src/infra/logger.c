@@ -8,8 +8,6 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
-#include <fcntl.h>
 #include "infra/config.h"
 #include "infra/utils.h"
 #define  LEVEL_NUM 5
@@ -63,9 +61,7 @@ int logger_init() {
 }
 
 /**
-* t:11290[D
 
-进程已结束，退出代码为 139 (interrupted by signal 11:SIGSEGV)
  * @param level
  * @param format
  * @param ...

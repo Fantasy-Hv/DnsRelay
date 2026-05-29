@@ -119,7 +119,7 @@ int session_wait(Session *session){
  */
 int session_open(uint16_t client_id,NetEnd client_ip,const DnsPacket * relay_pack) {
     Session* session = malloc(sizeof(Session));
-    do_log(DEBUG,"sesionopen for cli-%d,reid-%d",client_id,relay_pack->header.id);
+    do_log(DEBUG,"session open for cli-%d,reid-%d",client_id,relay_pack->header.id);
     session->client_id = client_id;
     session->client_ip = client_ip;
     session->relay_info.retry_times = 0;
@@ -129,7 +129,5 @@ int session_open(uint16_t client_id,NetEnd client_ip,const DnsPacket * relay_pac
     return 0;
 }
 
-char* session_to_log_str(const Session *session) {
-    return NULL;
-}
+
 

@@ -2,12 +2,12 @@
 // Created by yian on 2026/5/8.
 //
 
+// dns缓存全局单例，上层可直接从本接口读写缓存数据，需要线程安全的实现。(可以用<threads.h>提供的锁)
 #ifndef DNSRELAY_CACHE_H
 #define DNSRELAY_CACHE_H
 #include "infra/stl.h"
 #include "dns/protocol.h"
 
-// dns缓存全局单例，上层可直接从本接口读写缓存数据，需要线程安全的实现。(可以用<threads.h>提供的锁)
 // 协议解析层与缓存层数据交互的领域模型
 typedef struct {
     uint16_t answer_RRs; // 回答段的条目数量
