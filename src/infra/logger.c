@@ -25,7 +25,7 @@ int log_config_parser(const char *key, const char *value, T *result) {
             level++;
 
         level = level < LEVEL_NUM ? level: INFO;
-        *result = (T) INFO;
+        *result = (T) level;
         return 0;
     }
     for (int i = TRACE; i < LEVEL_NUM; i++) {
