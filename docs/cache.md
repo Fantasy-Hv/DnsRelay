@@ -3,7 +3,7 @@
 ## 一、需求约束
 
 1. 协议解析器要求 **O(1) 数据存取** → HashMap
-2. 过期检查要求 **遍历删除** → hash_map_foreach
+2. 过期检查要求 **遍历删除** → 哈希表虽然能遍历但因为内部有空桶不如线性数据结构好
 3. 缓存淘汰要求 **有序** → LRU 双向链表
 
 ---
@@ -17,6 +17,8 @@ typedef struct CacheEntry {
     char *key;                  // "qclass|qtype|qname"，HashMap 键
     CacheValue value;           // 直接内嵌，get 时以此为蓝本 clone 返回
     ms created_at;              // 缓存写入时刻，结合value.rr里的ttl来判断该缓存条目是否过期，
+    
+    // 这两个域构成一个双向链表，同时服务于缓存过期和缓存淘汰
     struct CacheEntry *hotter;  // LRU：更热（更近被访问）的缓存条目
     struct CacheEntry *colder;  // LRU：更冷（更久未被访问）的缓存条目
 } CacheEntry;
@@ -127,31 +129,7 @@ dns_cache_get(qname, qtype, qclass, result)
 
 ### 3.4 Prune（过期清理）
 
-采用 `hash_map_foreach` + 两阶段删除（遍历中不能修改 HashMap）：
-
-```
-dns_cache_prune_locked()
-│
-├─ 第一阶段：收集过期 key
-│   Vector *expired = vector_create(16)
-│   hash_map_foreach(table, collect_expired, &ctx)
-│       回调内：对 entry 的每条 RR 检查 ttl
-│               任一 RR 过期 →
-│                 vector_add(expired, strdup(key))   ← strdup！独立拷贝！
-│
-├─ 第二阶段：逐个删除
-│   for i in expired:
-│       char *key = vector_get(expired, i)
-│       hash_map_get(table, key, &entry)
-│       if entry:
-│           lru_remove(entry)                       // 从 LRU 链表摘出
-│           hash_map_remove(table, key, free)        // free 释放 HashMapEntry.key
-│           cache_entry_free(entry)                  // 释放 CacheEntry + 它的 key
-│           free(key)                                // 释放 prune 临时拷贝
-│           size--
-│
-└─ vector_free(expired)
-```
+直接便利lru链表，逐个检查过期。
 
 **调用时机**：
 - daemon 线程每 4 秒定时调用 `dns_cache_prune`（外部加锁版本）
@@ -175,37 +153,7 @@ dns_cache_prune_locked()
 
 **摘出 + 头插**（`lru_touch`）：
 
-```c
-static void lru_touch(DnsCache *cache, CacheEntry *entry) {
-    // 1. 摘出
-    entry->hotter->colder = entry->colder;
-    entry->colder->hotter = entry->hotter;
-    // 2. 头插
-    entry->colder = cache->head->colder;
-    entry->hotter = cache->head;
-    cache->head->colder->hotter = entry;
-    cache->head->colder = entry;
-}
-```
 
-### 3.5 Free
-
-```c
-int dns_cache_free() {
-    mtx_lock(&g_cache->lock);
-    // 遍历释放所有 entry
-    hash_map_foreach(g_cache->table, free_visitor, NULL); // 这个visitor会free(hashmapEntry.key),并调用CacheEntry的析构函数
-    mtx_unlock(&g_cache->lock);
-
-    mtx_destroy(&g_cache->lock);
-    hash_map_free(g_cache->table);   // 这里HashMap 已成空壳，只剩下内部的容器结构，不会指向任何外部添加的内存了。可以放心调用
-    free(g_cache->head);
-    free(g_cache->tail);
-    free(g_cache);
-    g_cache = NULL;
-    return 0;
-}
-```
 
 ---
 
