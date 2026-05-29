@@ -46,15 +46,16 @@ static char* recv_buf;
  * @return 是否读到有效包 0表示包可用，1-没有数据,-1失败,此时指针内容为NULL
  */
 int pack_recv(DnsPacket** dns_pack, NetEnd *src) {
+
     const int len = socket_recv_nowait(socket_holder, recv_buf, DNS_RECV_BUF_SIZE,src);
-    if (len == 0) {
-        do_log(WARN,"server : no data in sock");
+
+    if (len == 0)
         return 1;
-    }
     if (len == -1) { // 在返回途中构建错误发生时的调用链条
         ex_throw("pack_recv");
         return -1;
     }
+
     return pack_deserialize(recv_buf, len, dns_pack);
 }
 
@@ -78,7 +79,6 @@ int packet_send(const DnsPacket* dns_pack,const NetEnd* dest) {
    const int raw_pack_size = pack_serialize(dns_pack,send_buf,DNS_SEND_BUF_SIZE);
     if (raw_pack_size<0||raw_pack_size>MAX_PACKET_SIZE)
         return -1;
-    do_log(DEBUG,"pac_seri_size %d",raw_pack_size);
 
    return socket_send(socket_holder,send_buf,raw_pack_size,*dest) >=0 ? 0:-1;
 
@@ -89,12 +89,15 @@ int packet_send(const DnsPacket* dns_pack,const NetEnd* dest) {
 static struct LinkNode *next_upstream = NULL;
 /**
  * 从可用服务器中选择一个,这里可以实现负载均衡策略
- * @return 上游服务器端点指针，如果没有可用的上游服务器，返回NULL
+ * @return 上游服务器端点指针
  */
 static NetEnd* pick_upstream() {
-    if (next_upstream == NULL) next_upstream = upstreams->head;
+    if (next_upstream == NULL)
+        next_upstream = upstreams->head;
+
     NetEnd *upstream = next_upstream->data;
     next_upstream = next_upstream->next;
+
     return upstream;
 }
 
@@ -109,10 +112,8 @@ static int init_socket() {
          ex_throw("init_socket");
          return -1;
      }
-    int port;
-    if (config_get(SERV_SECTION,KEY_SERVER_PORT,(T*)&port))
-        port = VALUE_DEFAULT_SERVER_PORT;
-    if (socket_bind(socket_holder, port)) {
+
+    if (socket_bind(socket_holder, SERVER_PORT)) {
         ex_throw("init_socket");
         return -1;
     }
@@ -126,11 +127,13 @@ static int init_socket() {
  * @return
  */
 static void do_handle_timeout(Session* session) {
+
     if (session->relay_info.retry_times >= max_retry_time ) {
         id_free(session->relay_info.relay_packet->header.id);
         session_close(session);
         return ;
     }
+
     // 再次发送
     ex_try();
     if (packet_send(session->relay_info.relay_packet, pick_upstream())==-1) {
@@ -166,11 +169,10 @@ static void batch_timeout() {
 static void handle_dns_packet(const DnsPacket *packet_in, NetEnd source_end) {
     DnsPacket *packet_out; // 临时数据包
     ex_try(); // 这里的错误不需要向上传递，自己处理
-    // do_log(DEBUG,"recv pack :",packet_to_log_string(packet_in));
-    // do_log(DEBUG,packet_to_log_string(packet_in));
+
     if (packet_is_query(packet_in)) {
         //请求包
-        PacketDirection direction = pack_make_response_local(packet_in, &packet_out);
+        PacketDirection direction = pack_try_response_local(packet_in, &packet_out);
         if (direction == CLIENT) {
             //本地可以直接响应
             packet_send(packet_out, &source_end);
@@ -235,11 +237,17 @@ static int server_loop() {
         ex_try(); // 开启错误上下文
         socket_sleep_on(socket_holder,1,next_timeout);
         if (!ex_catch()) { // 收取dns数据包，select没有错误
-            DnsPacket * packet ;NetEnd source_end;
+
+            DnsPacket * packet ;
+            NetEnd source_end;
+
             while (1) {
 
                 int ret = pack_recv(&packet,&source_end); //需要返回值控制
-                if (ret==1)break; // 没有数据了
+                if (ret==1) {
+                    do_log(WARN,"server loop: no data in sock");
+                    break; // 没有数据了
+                }
                 if (ret==-1) { // pack_recv有错误，获取上下文
                     do_log(ERROR,"server loop err: %s",ex_end());
                     break;
@@ -259,29 +267,41 @@ static int server_loop() {
     }
     return -1;
 }
+// 1不合法的输入，0合法的输入。
+int validate_ipstr(const char* ipstr) {
+    // 如果把上游服务器设置为本机，只要有一个请求需要转发，系统就会陷入自我收发的死循环，id迅速耗竭
+    if (!strcasecmp(ipstr,"localhost") || !strcasecmp(ipstr,"127.0.0.1") || !strcasecmp(ipstr,"::1")) {
+        ex_throw("upstream can't be localhost");
+        return 1;
+    }
+    return 0;
+}
 int server_config_parser(const char* key,const char* value,T* result) {
-    if (!strcmp(key,KEY_UPSTREAMS)) {
-        // value是上游列表
-        int vl = strlen(value);
-        if (vl++==0) return 0;
-        LinkedList* ups = linked_list_create();
-        int i=0,j = 0; // i指向第一个有效字符，j指向最后一个字符，ip字符串[i,j)
-        if (value[j] == ',')i=++j;
+    if (!strcmp(key,KEY_UPSTREAMS)) { // value是上游列表
+        int vl ;
+        if ( (vl = strlen(value)+1) == 1) return 0; // value “”
+
+        int i=0,j = 0; //滑动窗口枚举每个ip串 i指向第一个有效字符，j指向最后一个字符，ip字符串[i,j)
         char item[64];
-        for (; j<vl; j++) {
-            // ,10.2.3.9\0第一个，被跳过，后面就没有了
-            if (value[j]==','||value[j]=='\0') { // i是ip字符串的长度,不含\0
+        LinkedList* ups = linked_list_create();
+
+        if (value[j] == ',')i=++j; //  第一个"，"被跳过
+        for (; j<vl; ++j) {
+
+            if (value[j]==','||value[j]=='\0') {
+
                 memcpy(item,&value[i],j-i);
                 item[j-i]='\0';
                 NetEnd* end ;
-                if (ipstr2binary(item,&end)) {  // 解析失败
+                if (validate_ipstr(item)||ipstr2binary(item,&end)) {  // 解析失败
                     ex_throw("serv_config_parser:upstream failed");
                     return -1;
                 }
+                end->port=SERVER_PORT;
+                h2n_2((uint16_t*)&end->port);
                 linked_list_addFirst(ups,end);
                 i=j+1;
             }
-            // i=j+1;
         }
         *result = ups;
         return 0;
@@ -291,7 +311,7 @@ int server_config_parser(const char* key,const char* value,T* result) {
         return 0;
     }
     if (!strcmp(key,KEY_PACKET_TIMEOUT)) {
-        *result = (T)atol(value);
+        *result = (T)(atol(value)*1000);
         return 0;
     }
     // 降级为原字符串
@@ -313,27 +333,34 @@ void server_config_cleaner(const char * key,T value) {
 
 int server_start() {
     ex_try();
+    // 注册到配置系统
     config_register_parser(SERV_SECTION,server_config_parser);
     config_register_cleaner(SERV_SECTION,server_config_cleaner);
+
     //初始化降级策略配置
     config_get(SERV_SECTION,KEY_PACKET_TIMEOUT,(T*)&request_timeout);
     config_get(SERV_SECTION,KEY_MAX_RETRY_TIME,(T*)&max_retry_time);
+    if (ex_catch())do_log(ERROR,"serv_config read failed %s",ex_end());
+
     //获取上游服务器列表
-    config_get(SERV_SECTION,KEY_UPSTREAMS,(T*)&upstreams); //
+    config_get(SERV_SECTION,KEY_UPSTREAMS,(T*)&upstreams);
     if (linked_list_is_empty(upstreams)) {
         do_log(ERROR,"server:upstream not configured %s",ex_end());
         return -1;
     }
+
     //创建守护线程
     thrd_t cache_ttl;
     thrd_create(&cache_ttl,daemon_dnscache_ttl,NULL);
     thrd_detach(cache_ttl);
+
     //初始化socket
     ex_try();
     if (init_socket()) {
         do_log(ERROR,"server start: %s",ex_end());
         return -1;
     }
+
     //进入主循环,处理请求
     recv_buf = malloc(DNS_RECV_BUF_SIZE);
     send_buf = malloc(DNS_SEND_BUF_SIZE);

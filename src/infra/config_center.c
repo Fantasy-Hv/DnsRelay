@@ -1,8 +1,5 @@
 //
 // Created by yian on 2026/5/9.
-/*
- *目前想不到简单通用的配置文件解析方法
-*/
 //
 #include <ctype.h>
 #include <stdlib.h>
@@ -113,7 +110,7 @@ int config_get(const char* section,const char *key,T* value) {
         }
         //解析出错
         else {
-            ex_throw("config_get:[%s,%s]", section, key);
+            ex_throw("when config_get:[%s,%s]", section, key);
             return -1;
         }
     }
@@ -168,14 +165,17 @@ int config_inject(const char* section,const char *key,const char* value) {
     if (!hash_map_get(sec->entries,(K)key,(T*)&config_value)) {  // 如果有配置值了，
         // 释放旧数据
         ConfigCleaner cleaner;
-        if (config_value->is_cook&&!hash_map_get(config_cleaners,(K)section,(T*)&cleaner))
+        if (config_value->is_cook) {
+            if (!hash_map_get(config_cleaners,(K)section,(T*)&cleaner))
                 cleaner(key,config_value->value);
+            // 没有析构函数的话，说明是基本类型，不用释放，直接覆盖就行
+        }
         else free(config_value->value);
     }  // 没有配置值，新建一项
     else config_value = entry_create();
-
+    config_value->is_cook = 0;
     config_value->value = strdup(value);
-//0x555555591c30
+
     K new_key = strdup(key);
     if (hash_map_put(sec->entries,new_key,config_value)) // 如果原来已经存有一份相等的key
         free(new_key);
@@ -226,6 +226,7 @@ int config_load_file(const char * filepath) {
             while (!isspace((unsigned char)nc[token_len])&&nc[token_len]!='\0') token_len++;
             if (token_len==0) break;
             memcpy(cur_value_str,nc,token_len);
+            cur_value_str[token_len]='\0';
             //put
             config_inject(cur_section_str,cur_key_str,cur_value_str);
         }

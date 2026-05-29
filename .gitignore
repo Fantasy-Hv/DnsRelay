@@ -1,2 +1,4 @@
 .idea/**/**
 .venv/**/**
+/bin/debug.txt
+/cmake-build-debug/

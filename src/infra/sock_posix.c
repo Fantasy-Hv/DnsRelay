@@ -78,8 +78,12 @@ int socket_send(SocketHolder socket,const void *buf, size_t buf_len,NetEnd dest)
     //发包
     int ret;
     ret = sendto(socket, buf, buf_len,SOCK_NONBLOCK, addr, add_len);
-    if (ret==-1)
-        ex_throw("syscall sendto,errno %d",errno);
+    if (ret == -1) {
+        if (errno == 101)
+            ex_throw("syscall sendto : network unreachable");
+        else ex_throw("syscall sendto err:%d",errno);
+    }
+
     free(addr);
     return ret;
 }

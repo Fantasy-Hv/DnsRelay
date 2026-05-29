@@ -5,14 +5,11 @@
 #ifndef DNSRELAY_LOG_H
 #define DNSRELAY_LOG_H
 //日志输出方式：0.stdout/err 1.file
-// #define KEY_LOG_OUTPUT "log_output"
 #define KEY_LOG_LEVEL "log_level"
-// typedef enum {
-//      LOG_STDOUT,LOG_FILE,
-// }LogOutput;
+
 #define LOG_SECTION "log"
 typedef enum {
-     TRACE,DEBUG,INFO,WARN,ERROR
+     TRACE=0,DEBUG,INFO,WARN,ERROR
 }LogLevel;
 
 int logger_init();

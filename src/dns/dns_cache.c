@@ -36,6 +36,9 @@ typedef struct {
     char *qname;
     uint16_t qtype;
     uint16_t qclass;
+    uint16_t answer_RRs;
+    uint16_t authority_RRs;
+    uint16_t additional_RRs;
     // 一次查询可能对应多条 RR，因此这里用 Vector 存一组副本
     Vector *records;   // T = ResourceRecord*
     // 绝对过期时间戳（毫秒）
@@ -56,7 +59,7 @@ typedef struct {
 
 static DnsCache *g_cache;
 #define DNS_CACHE_DEFAULT_CAPACITY 1024
-#define DNS_CACHE_PRELOAD_FILE "./dnsrelay.txt"
+#define DNS_CACHE_PRELOAD_FILE "./dnsrelay.ini"
 #define DNS_CACHE_PRELOAD_TTL UINT32_MAX
 
 // 链表删除时只需要判断“是不是同一个对象指针”。
@@ -156,6 +159,9 @@ static void cache_entry_clear_records(CacheEntry *entry) {
     }
     vector_free(entry->records);
     entry->records = NULL;
+    entry->answer_RRs = 0;
+    entry->authority_RRs = 0;
+    entry->additional_RRs = 0;
 }
 
 static CacheEntry *cache_entry_create(const char *qname, uint16_t qtype, uint16_t qclass, ms expire_at) {
@@ -194,6 +200,43 @@ static int cache_entry_append_rr(CacheEntry *entry, const ResourceRecord *record
     const ms expire_at = sys_time_ms() + (ms) record->ttl * 1000;
     if (entry->expire_at == 0 || expire_at < entry->expire_at) {
         entry->expire_at = expire_at;
+    }
+    return 0;
+}
+
+static int cache_value_rr_count(CacheValue cache_value) {
+    return cache_value.answer_RRs + cache_value.authority_RRs + cache_value.additional_RRs;
+}
+
+static int cache_entry_write_value(CacheEntry *entry, CacheValue cache_value) {
+    int rr_count = cache_value_rr_count(cache_value);
+    if (entry == NULL || cache_value.rrs == NULL || rr_count <= 0 || vector_size(cache_value.rrs) < rr_count) {
+        return 1;
+    }
+
+    cache_entry_clear_records(entry);
+    entry->records = vector_create(rr_count);
+    entry->expire_at = 0;
+    if (entry->records == NULL) {
+        return 1;
+    }
+
+    entry->answer_RRs = cache_value.answer_RRs;
+    entry->authority_RRs = cache_value.authority_RRs;
+    entry->additional_RRs = cache_value.additional_RRs;
+
+    for (int i = 0; i < rr_count; i++) {
+        ResourceRecord *rr = vector_get(cache_value.rrs, i);
+        if (rr == NULL || rr->ttl == 0) {
+            return 1;
+        }
+        if (cache_entry_append_rr(entry, rr)) {
+            return 1;
+        }
+    }
+
+    if (vector_size(entry->records) == 0) {
+        return 1;
     }
     return 0;
 }
@@ -279,7 +322,20 @@ static int preload_rr(const char *name, const char *data, Qtype type) {
         return 1;
     }
 
-    int ret = dns_cache_put(rr);
+    Vector *answers = vector_create(1);
+    if (answers == NULL) {
+        rr_free(rr);
+        return 1;
+    }
+    vector_add(answers, rr);
+    CacheValue cache_value = {
+        .answer_RRs = 1,
+        .authority_RRs = 0,
+        .additional_RRs = 0,
+        .rrs = answers,
+    };
+    int ret = dns_cache_put(rr->name, rr->type, rr->class, cache_value);
+    vector_free(answers);
     rr_free(rr);
     return ret;
 }
@@ -310,7 +366,13 @@ static int preload_alias_answer_set(const char *alias_name, const char *canonica
 
     vector_add(answers, alias_rr);
     vector_add(answers, target_rr);
-    int ret = dns_cache_put_answer_set(&question, answers);
+    CacheValue cache_value = {
+        .answer_RRs = 2,
+        .authority_RRs = 0,
+        .additional_RRs = 0,
+        .rrs = answers,
+    };
+    int ret = dns_cache_put(question.qname, question.qtype, question.qclass, cache_value);
 
     rr_free(alias_rr);
     rr_free(target_rr);
@@ -452,70 +514,12 @@ int dns_cache_init() {
  * @param record
  * @return 0-缓存成功 1-缓存失败
  */
-int dns_cache_put(const ResourceRecord * record) {
-    if (g_cache == NULL || record == NULL || record->name == NULL || record->ttl == 0) {
+int dns_cache_put(const char* qname,Qtype type,Class class,CacheValue cache_value) {
+    if (g_cache == NULL || qname == NULL || cache_value.rrs == NULL || cache_value_rr_count(cache_value) <= 0) {
         return 1;
     }
 
-    char *key = cache_key_create(record->name, record->type, record->class);
-    if (key == NULL) {
-        return 1;
-    }
-
-    if (mtx_lock(&g_cache->lock) != thrd_success) {
-        free(key);
-        return 1;
-    }
-
-    // 每次写入前顺手清一次过期项，避免 size 被无效数据占满。
-    dns_cache_prune_locked();
-    if (g_cache->size >= g_cache->capacity) {
-        mtx_unlock(&g_cache->lock);
-        free(key);
-        return 1;
-    }
-
-    CacheEntry *entry = NULL;
-    if (hash_map_get(g_cache->table, key, (T *) &entry) != 0) {
-        // 首次出现这个查询键：新建一条缓存项，并挂到 table + entries 两个容器里。
-        entry = cache_entry_create(record->name, record->type, record->class, 0);
-        if (entry == NULL) {
-            mtx_unlock(&g_cache->lock);
-            free(key);
-            return 1;
-        }
-        if (hash_map_put(g_cache->table, entry->key, entry) != 0) {
-            cache_entry_free(entry);
-            mtx_unlock(&g_cache->lock);
-            free(key);
-            return 1;
-        }
-        linked_list_addLast(g_cache->entries, entry);
-        g_cache->size++;
-    }
-
-    // 无论是新条目还是已有条目，都把 RR 副本追加进去。
-    if (cache_entry_append_rr(entry, record)) {
-        // 如果这是个刚创建但还没有任何 RR 的空条目，失败时要回滚删掉。
-        if (entry->records != NULL && vector_size(entry->records) == 0) {
-            cache_remove_entry(entry);
-        }
-        mtx_unlock(&g_cache->lock);
-        free(key);
-        return 1;
-    }
-
-    mtx_unlock(&g_cache->lock);
-    free(key);
-    return 0;
-}
-
-int dns_cache_put_answer_set(const SectionQuestion *question, Vector *records) {
-    if (g_cache == NULL || question == NULL || question->qname == NULL || records == NULL || vector_size(records) == 0) {
-        return 1;
-    }
-
-    char *key = cache_key_create(question->qname, question->qtype, question->qclass);
+    char *key = cache_key_create(qname, type, class);
     if (key == NULL) {
         return 1;
     }
@@ -535,7 +539,7 @@ int dns_cache_put_answer_set(const SectionQuestion *question, Vector *records) {
             return 1;
         }
 
-        entry = cache_entry_create(question->qname, question->qtype, question->qclass, 0);
+        entry = cache_entry_create(qname, type, class, 0);
         if (entry == NULL) {
             mtx_unlock(&g_cache->lock);
             free(key);
@@ -549,32 +553,9 @@ int dns_cache_put_answer_set(const SectionQuestion *question, Vector *records) {
         }
         linked_list_addLast(g_cache->entries, entry);
         g_cache->size++;
-    } else {
-        cache_entry_clear_records(entry);
-        entry->records = vector_create(vector_size(records));
-        entry->expire_at = 0;
-        if (entry->records == NULL) {
-            cache_remove_entry(entry);
-            mtx_unlock(&g_cache->lock);
-            free(key);
-            return 1;
-        }
     }
 
-    for (int i = 0; i < vector_size(records); i++) {
-        ResourceRecord *rr = vector_get(records, i);
-        if (rr == NULL || rr->ttl == 0) {
-            continue;
-        }
-        if (cache_entry_append_rr(entry, rr)) {
-            cache_remove_entry(entry);
-            mtx_unlock(&g_cache->lock);
-            free(key);
-            return 1;
-        }
-    }
-
-    if (entry->records == NULL || vector_size(entry->records) == 0) {
+    if (cache_entry_write_value(entry, cache_value)) {
         cache_remove_entry(entry);
         mtx_unlock(&g_cache->lock);
         free(key);
@@ -593,10 +574,15 @@ int dns_cache_put_answer_set(const SectionQuestion *question, Vector *records) {
  * @param result 结果列表，类型为T=ResourceRecord*,指向缓存中RR的拷贝，传入的列表必须有效,
  * @return 0-命中 ，1-miss
  */
-int dns_cache_get(const char* qname,Qtype type,Class qclass,Vector* result) {
-    if (g_cache == NULL || qname == NULL || result == NULL) {
+int dns_cache_get(const char* qname,Qtype type,Class qclass,CacheValue* cache_value) {
+    if (g_cache == NULL || qname == NULL || cache_value == NULL) {
         return 1;
     }
+
+    cache_value->answer_RRs = 0;
+    cache_value->authority_RRs = 0;
+    cache_value->additional_RRs = 0;
+    cache_value->rrs = NULL;
 
     char *key = cache_key_create(qname, type, qclass);
     if (key == NULL) {
@@ -617,26 +603,40 @@ int dns_cache_get(const char* qname,Qtype type,Class qclass,Vector* result) {
 
     const ms now = sys_time_ms();
     if (entry->expire_at <= now) {
-        // 查到了但已经过期：顺手删掉，然后按 miss 返回。
         cache_remove_entry(entry);
         mtx_unlock(&g_cache->lock);
         free(key);
         return 1;
     }
 
-    // 对客户端返回“剩余 TTL”，而不是缓存写入时的原始 TTL。
     const ms remain_ms = entry->expire_at - now;
     const uint32_t remain_ttl = (uint32_t) ((remain_ms + 999) / 1000);
+    Vector *records = vector_create(vector_size(entry->records));
+    if (records == NULL) {
+        mtx_unlock(&g_cache->lock);
+        free(key);
+        return 1;
+    }
+
     for (int i = 0; i < vector_size(entry->records); i++) {
         ResourceRecord *copy_rr = rr_clone(vector_get(entry->records, i));
         if (copy_rr == NULL) {
+            for (int j = 0; j < vector_size(records); j++) {
+                rr_free(vector_get(records, j));
+            }
+            vector_free(records);
             mtx_unlock(&g_cache->lock);
             free(key);
             return 1;
         }
         copy_rr->ttl = remain_ttl;
-        vector_add(result, copy_rr);
+        vector_add(records, copy_rr);
     }
+
+    cache_value->answer_RRs = entry->answer_RRs;
+    cache_value->authority_RRs = entry->authority_RRs;
+    cache_value->additional_RRs = entry->additional_RRs;
+    cache_value->rrs = records;
 
     mtx_unlock(&g_cache->lock);
     free(key);

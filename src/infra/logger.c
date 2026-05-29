@@ -4,47 +4,64 @@
 //
 #include "infra/logger.h"
 
+#include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
-
 #include "infra/config.h"
 #include "infra/utils.h"
 #define  LEVEL_NUM 5
 static char* LEVEL_STR[LEVEL_NUM]={"TRACE","DEBUG","INFO","WARN","ERROR"};
 static  LogLevel logging_level = INFO; //日志过滤级别
-static FILE* output_channels[LEVEL_NUM] ; // 各级别的输出流
+static FILE *output_channels[LEVEL_NUM]; // 各级别的输出流
 //日志模块的配置值都是基本类型，因此不用注册配置清理函数
-int log_config_parser(const char* key,const char* value,T* result) {
+int log_config_parser(const char *key, const char *value, T *result) {
     if (!strcmp(key,KEY_LOG_LEVEL)) {
         LogLevel level = TRACE;
-        while (level<LEVEL_NUM&&!strcasecmp(LEVEL_STR[level],value))
+
+        while (level < LEVEL_NUM && strcasecmp(LEVEL_STR[level], value) != 0)
             level++;
-        if (level<LEVEL_NUM) {
-            *result = (T)level;
-            return 0;
-        }
-        *result = (T)INFO;
+
+        level = level < LEVEL_NUM ? level: INFO;
+        *result = (T) level;
         return 0;
+    }
+    for (int i = TRACE; i < LEVEL_NUM; i++) {
+        if (strcasecmp(LEVEL_STR[i], key) == 0) {
+
+            if (strcasecmp(value, "stdout") == 0)
+                *result = stdout;
+            else if (strcasecmp(value, "stderr") == 0)
+                *result = stderr;
+            else {
+                FILE *out = fopen(value, "a+");
+
+                if (out == NULL) {
+                    printf("ERROR: log file %s open failed %d,check config\n", value,errno);
+                    *result = stdout;
+                } else *result = out;
+            }
+
+        }
     }
     return 0;
 }
 
 int logger_init() {
-    config_register_parser(LOG_SECTION,log_config_parser);
-    config_get(LOG_SECTION,KEY_LOG_LEVEL, (T*)&logging_level);
-    output_channels[TRACE]=stdout; // 跟踪程序运行
-    output_channels[DEBUG]=stdout; // 调试信息
-    output_channels[INFO]=stdout; // 程序运行的关键节点
-    output_channels[WARN]=stdout; // 警告，可能会导致错误
-    output_channels[ERROR]=stdout; // 错误
+    config_register_parser(LOG_SECTION, log_config_parser);
+    // 日志级别
+    config_get(LOG_SECTION,KEY_LOG_LEVEL, (T *) &logging_level);
+    // 日志输出通道
+    for (int i = logging_level; i < LEVEL_NUM; i++) {
+        output_channels[i] = stdout;
+        config_get(LOG_SECTION, LEVEL_STR[i], (T *) &output_channels[i]);
+    }
+
     return 0;
 }
 
 /**
-* t:11290[D
 
-进程已结束，退出代码为 139 (interrupted by signal 11:SIGSEGV)
  * @param level
  * @param format
  * @param ...
@@ -60,4 +77,5 @@ void do_log(LogLevel level, const char *format, ...) {
     vfprintf(channel,format,args); // 格式化输出
     va_end(args); // 释放参数列表
     fprintf(channel,"\n");
+    fflush(channel);
 }

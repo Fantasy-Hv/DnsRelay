@@ -117,23 +117,21 @@ typedef struct {
     SectionHeader header; // 控制信息+后续段数量
     Vector*  questions; // T = SessionQuestion*
     //下面三个段的列表元素类型T = ResourceRecord*，并且是可选的
+
     /**
-     * 对question的直接回答
-     */
-    Vector*  answers;
-    /**
-     * 这个段用来提供权威服务器的信息
+     * answer段直接回答question
+     *
+     * authority段用来提供权威服务器的信息
       type  rdata
       NS 当服务器不是查询域的权威，但知道权威服务器是时（即“引用应答”或“委派”），会在 Authority 段返回对应的 NS 记录
      */
-    Vector* authorites;
     /**
-     * 此段提供辅助数据
+     * additional段提供辅助数据
      * type     rdata
        A/AAAA   auth段中NS记录的权威服务器的ip
        OPT     用于扩展 DNS 协议，客户端和服务器用它来协商更大的 UDP 包尺寸
      */
-    Vector* additionals; // 权威域名服务器的ip
+    Vector* rrs;
 } DnsPacket;
 /*
  * RR的类型有很多，每种类型的rdata格式、含义也不一样，
@@ -141,7 +139,7 @@ typedef struct {
  * 考虑RR的生命周期：
  * 当本地缓存为空时，客户端发来请求报文，如果是非主机状态查询，
  * 且客户端希望递归，那么只需要替换id直接转发给上游拿RR即可，不需要我们组装RR
- * 上游响应回来后，以RR为单位放入缓存，下次可以直接根据Question查到对应RR
+ * 上游响应回来后，以RRs为单位放入缓存，下次可以直接根据Question查到对应RR
  * 全程都不需要解析RR里面的rdata
 */
 
@@ -218,7 +216,7 @@ void pack_make_response_relay(const DnsPacket* recv,DnsPacket** send,uint16_t cl
  *如果需要查询上游，返回null
  *@return CLIENT-构造成功，可以返回响应，UPSTREAM-构造失败，需要请求上游，response 指向NULL
  */
-PacketDirection pack_make_response_local(const DnsPacket* query,DnsPacket** response);
+PacketDirection pack_try_response_local(const DnsPacket* query,DnsPacket** response);
 
 /**
  * 生成服务器内部错误响应包
@@ -230,6 +228,7 @@ void pack_make_inner_error(const DnsPacket* query,DnsPacket ** answer ) ;
 /**
  * @brief 将网络字节流反序列化为dns包
  * @param raw_pack 网络字节流
+ * @param len 包的字节流大小
  * @param packet
  * @return 0-解析成功，-1解析失败
  */

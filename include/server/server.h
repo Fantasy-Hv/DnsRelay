@@ -8,9 +8,6 @@
 
 #define SERV_SECTION "server"
 
-//端口配置项
-#define KEY_SERVER_PORT "server_port"
-#define VALUE_DEFAULT_SERVER_PORT 53
 //超时配置项,单位为秒
 #define KEY_PACKET_TIMEOUT "dns_packet_timeout"
 #define VALUE_DEFAULT_REQUEST_TIMEOUT 3
@@ -20,7 +17,7 @@
 #define VALUE_DEFAULT_MAX_RETRY_TIME 2
 //上游dns服务器ip,多个用逗号隔开
 #define KEY_UPSTREAMS "server_upstream"
-
+#define SERVER_PORT 53
 /**
  * 启动服务器主线程
  * @return

@@ -78,7 +78,7 @@ void vector_free(Vector* vector);
 
 
 
-T vector_get(Vector* vector,int index);
+T vector_get(const Vector* vector,int index);
 
 
 
@@ -87,7 +87,7 @@ T vector_get(Vector* vector,int index);
  * @param vector
  * @return
  */
-int vector_size(Vector* vector);
+int vector_size(const Vector* vector);
 
 
 

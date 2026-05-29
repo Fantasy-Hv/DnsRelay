@@ -2,14 +2,24 @@
 // Created by yian on 2026/5/8.
 //
 
+// dns缓存全局单例，上层可直接从本接口读写缓存数据，需要线程安全的实现。(可以用<threads.h>提供的锁)
 #ifndef DNSRELAY_CACHE_H
 #define DNSRELAY_CACHE_H
 #include "infra/stl.h"
 #include "dns/protocol.h"
 
-// dns缓存全局单例，上层可直接从本接口读写缓存数据，需要线程安全的实现。(可以用<threads.h>提供的锁)
-
-
+// 协议解析层与缓存层数据交互的领域模型
+typedef struct {
+    uint16_t answer_RRs; // 回答段的条目数量
+    uint16_t authority_RRs; //权威段的条目数量
+    uint16_t additional_RRs; // 附加段的条目数量
+    /*
+     *三个段的rr,必须按照answer、auth、additional的顺序
+     * 添加缓存时，这个列表由上层创建,上层释放
+     * 缓存需要做深拷贝
+    */
+    Vector* rrs ; //T = ResourceRecord*
+} CacheValue;
 
 /**
  * 缓存初始化
@@ -18,29 +28,17 @@
 int dns_cache_init();
 
 /**
- * 缓存RR记录
- * @param record
+ * 缓存RR记录，
+ * @param cache_value 缓存记录，rr列表只读，内部做深拷贝
  * @return 0-缓存成功 1-缓存失败
  */
-int dns_cache_put(const ResourceRecord * record);
-
+int dns_cache_put(const char* qname,Qtype type,Class class,CacheValue cache_value);
 /**
- * 按问题三元组缓存一整组回答。
- * 这是真正的主缓存接口，用于缓存一次查询对应的完整 answer 集合。
- * @param question 查询问题
- * @param records 回答RR列表，元素类型 T = ResourceRecord*
- * @return 0-缓存成功 1-缓存失败
+ * 根据问题name和type class查询对应的RR
+ * @param result 结果容器，rrs域会回填，所以rrs=NULL是允许的。如果缓存miss,rrs为NULL
+ * @return 0-命中 ，1-miss，
  */
-int dns_cache_put_answer_set(const SectionQuestion *question, Vector *records);
-
-/**
- * 根据name和type查询对应的RR
- * @param name RR的name
- * @param type RR类型
- * @param result 结果列表，类型为T=ResourceRecord*,指向缓存中RR的拷贝，传入的列表必须有效,
- * @return 0-命中 ，1-miss
- */
-int dns_cache_get(const char* qname,Qtype type,Class qclass,Vector* result);
+int dns_cache_get(const char* qname,Qtype type,Class qclass,CacheValue* result);
 
 
 /**
