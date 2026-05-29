@@ -113,11 +113,7 @@ static int init_socket() {
          return -1;
      }
 
-    int port;
-    if (config_get(SERV_SECTION,KEY_SERVER_PORT,(T*)&port))
-        port = VALUE_DEFAULT_SERVER_PORT;
-
-    if (socket_bind(socket_holder, port)) {
+    if (socket_bind(socket_holder, SERVER_PORT)) {
         ex_throw("init_socket");
         return -1;
     }
@@ -301,6 +297,8 @@ int server_config_parser(const char* key,const char* value,T* result) {
                     ex_throw("serv_config_parser:upstream failed");
                     return -1;
                 }
+                end->port=SERVER_PORT;
+                h2n_2((uint16_t*)&end->port);
                 linked_list_addFirst(ups,end);
                 i=j+1;
             }
