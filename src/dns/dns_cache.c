@@ -26,8 +26,15 @@
  */
 /**
  * 单条缓存项。
- * 一个缓存项对应一个查询三元组：
- * (qname, qtype, qclass) -> 多条 ResourceRecord
+ * 当前缓存模型是：
+ * (qname, qtype, qclass) -> CacheValue
+ *
+ * 其中 CacheValue 在本模块内部被展开为：
+ * 1. 一组深拷贝后的 RR 副本 records
+ * 2. answer / authority / additional 三段的条目数量
+ * 3. 这一整组结果共享的最早过期时间 expire_at
+ *
+ * 也就是说，这里缓存的不是“单条 RR”，而是“一次问题对应的完整结果集”。
  */
 typedef struct {
     // 供 HashMap 使用的实际键，格式为 "qclass|qtype|qname"
@@ -47,7 +54,8 @@ typedef struct {
 
 /**
  * 整个缓存模块的运行时状态。
- * table 负责按 key 快速定位，entries 负责遍历清理。
+ * table 负责按 question key 快速定位，
+ * entries 负责遍历清理过期项。
  */
 typedef struct {
     HashMap *table;    // key -> CacheEntry*
@@ -97,7 +105,8 @@ static char *cache_key_create(const char *qname, uint16_t qtype, uint16_t qclass
 
 /**
  * 深拷贝一条 RR。
- * 缓存层不直接持有调用方的 RR 指针，而是保存自己的副本。
+ * 缓存层永远不直接持有上层传进来的 RR 指针，
+ * 否则上层释放包或释放临时 Vector 后，缓存里的指针会悬空。
  */
 static ResourceRecord *rr_clone(const ResourceRecord *record) {
     if (record == NULL) {
@@ -208,6 +217,14 @@ static int cache_value_rr_count(CacheValue cache_value) {
     return cache_value.answer_RRs + cache_value.authority_RRs + cache_value.additional_RRs;
 }
 
+/**
+ * 用一个新的 CacheValue 覆盖写入 entry。
+ * 这里会：
+ * 1. 清空旧 RR 副本
+ * 2. 深拷贝新的 rr 列表
+ * 3. 记录三段的数量信息
+ * 4. 取整组结果里最早过期的 TTL 作为 entry 过期时间
+ */
 static int cache_entry_write_value(CacheEntry *entry, CacheValue cache_value) {
     int rr_count = cache_value_rr_count(cache_value);
     if (entry == NULL || cache_value.rrs == NULL || rr_count <= 0 || vector_size(cache_value.rrs) < rr_count) {
@@ -275,6 +292,10 @@ static int dns_cache_prune_locked(void) {
     return 0;
 }
 
+/**
+ * 去掉行首尾空白。
+ * 预缓存配置解析时，所有 key/value/token 都会先经过这个步骤。
+ */
 static char *trim_space(char *text) {
     if (text == NULL) {
         return NULL;
@@ -303,6 +324,12 @@ static void strip_inline_comment(char *line) {
     }
 }
 
+/**
+ * 根据配置左值里的 IP 文本判断预缓存记录类型。
+ * IPv4 -> A
+ * IPv6 -> AAAA
+ * 否则认为这一行非法
+ */
 static Qtype ip_text_to_qtype(const char *ip_text) {
     struct in_addr addr4;
     if (inet_pton(AF_INET, ip_text, &addr4) == 1) {
@@ -340,6 +367,18 @@ static int preload_rr(const char *name, const char *data, Qtype type) {
     return ret;
 }
 
+/**
+ * 为 (c)alias 这种配置项生成“完整回答集”。
+ * 例如：
+ * 20.3.5.3 = www.target.com,(c)alias.target.com
+ *
+ * alias.target.com 的预缓存值不是单独一条 CNAME，
+ * 而是按真实查询语义构造成：
+ *   alias.target.com CNAME www.target.com
+ *   www.target.com   A     20.3.5.3
+ *
+ * 这样 alias 的 A/AAAA 查询就能直接命中缓存。
+ */
 static int preload_alias_answer_set(const char *alias_name, const char *canonical_name, const char *ip_text, Qtype type) {
     ResourceRecord *alias_rr = rr_make_from_config_pair(alias_name, DNS_CACHE_PRELOAD_TTL, QTYPE_CNAME, canonical_name);
     if (alias_rr == NULL) {
@@ -414,6 +453,12 @@ static int dns_cache_preload_line(const char *ip_text, char *domains_text) {
     return load_err;
 }
 
+/**
+ * 从配置文件中读取 [cache] 段，并在初始化阶段预装填缓存。
+ * 支持两种形式：
+ * 1. ip = domain1,domain2
+ * 2. ip = canonical,(c)alias1,(c)alias2
+ */
 static int dns_cache_preload_from_file(const char *filepath) {
     FILE *fd = fopen(filepath, "r");
     if (fd == NULL) {
@@ -504,6 +549,7 @@ int dns_cache_init() {
     cache->capacity = DNS_CACHE_DEFAULT_CAPACITY;
     // 全局单例入口，后续 put/get/prune/free 都通过它访问同一份缓存状态。
     g_cache = cache;
+    // 初始化完成后立刻装填静态预缓存。
     dns_cache_preload_from_file(DNS_CACHE_PRELOAD_FILE);
     return 0;
 }
@@ -513,6 +559,10 @@ int dns_cache_init() {
  * 缓存RR记录
  * @param record
  * @return 0-缓存成功 1-缓存失败
+ */
+/**
+ * 以问题三元组为 key 写入一整组缓存结果。
+ * 这是当前缓存的主写接口，动态查询结果和预缓存最终都会汇总到这里。
  */
 int dns_cache_put(const char* qname,Qtype type,Class class,CacheValue cache_value) {
     if (g_cache == NULL || qname == NULL || cache_value.rrs == NULL || cache_value_rr_count(cache_value) <= 0) {
@@ -529,6 +579,7 @@ int dns_cache_put(const char* qname,Qtype type,Class class,CacheValue cache_valu
         return 1;
     }
 
+    // 写入前顺手清理一次过期项，避免无效数据占满容量。
     dns_cache_prune_locked();
 
     CacheEntry *entry = NULL;
@@ -555,6 +606,7 @@ int dns_cache_put(const char* qname,Qtype type,Class class,CacheValue cache_valu
         g_cache->size++;
     }
 
+    // 同一个问题新的应答会覆盖旧值，而不是追加。
     if (cache_entry_write_value(entry, cache_value)) {
         cache_remove_entry(entry);
         mtx_unlock(&g_cache->lock);
@@ -573,6 +625,10 @@ int dns_cache_put(const char* qname,Qtype type,Class class,CacheValue cache_valu
  * @param type RR类型
  * @param result 结果列表，类型为T=ResourceRecord*,指向缓存中RR的拷贝，传入的列表必须有效,
  * @return 0-命中 ，1-miss
+ */
+/**
+ * 按问题三元组读取缓存。
+ * 命中后返回的是一份新的 CacheValue 副本，调用方负责释放其中的 rrs。
  */
 int dns_cache_get(const char* qname,Qtype type,Class qclass,CacheValue* cache_value) {
     if (g_cache == NULL || qname == NULL || cache_value == NULL) {
@@ -609,6 +665,7 @@ int dns_cache_get(const char* qname,Qtype type,Class qclass,CacheValue* cache_va
         return 1;
     }
 
+    // 对外返回剩余 TTL，而不是缓存写入时的原始 TTL。
     const ms remain_ms = entry->expire_at - now;
     const uint32_t remain_ttl = (uint32_t) ((remain_ms + 999) / 1000);
     Vector *records = vector_create(vector_size(entry->records));
