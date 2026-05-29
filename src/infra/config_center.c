@@ -113,7 +113,7 @@ int config_get(const char* section,const char *key,T* value) {
         }
         //解析出错
         else {
-            ex_throw("config_get:[%s,%s]", section, key);
+            ex_throw("when config_get:[%s,%s]", section, key);
             return -1;
         }
     }

@@ -9,51 +9,56 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-
+#include <fcntl.h>
 #include "infra/config.h"
 #include "infra/utils.h"
 #define  LEVEL_NUM 5
 static char* LEVEL_STR[LEVEL_NUM]={"TRACE","DEBUG","INFO","WARN","ERROR"};
 static  LogLevel logging_level = INFO; //日志过滤级别
-static FILE* output_channels[LEVEL_NUM] ; // 各级别的输出流
+static FILE *output_channels[LEVEL_NUM]; // 各级别的输出流
 //日志模块的配置值都是基本类型，因此不用注册配置清理函数
-int log_config_parser(const char* key,const char* value,T* result) {
+int log_config_parser(const char *key, const char *value, T *result) {
     if (!strcmp(key,KEY_LOG_LEVEL)) {
         LogLevel level = TRACE;
-        while (level<LEVEL_NUM&&strcasecmp(LEVEL_STR[level],value)!=0)
+
+        while (level < LEVEL_NUM && strcasecmp(LEVEL_STR[level], value) != 0)
             level++;
-        if (level<LEVEL_NUM) {
-            *result = (T)level;
-            return 0;
-        }
-        *result = (T)INFO;
+
+        level = level < LEVEL_NUM ? level: INFO;
+        *result = (T) INFO;
         return 0;
     }
-    for (int i=TRACE;i<LEVEL_NUM;i++) {
-        if (strcasecmp(LEVEL_STR[i],key)==0) {
-            if (strcasecmp(value,"stdout")==0)
+    for (int i = TRACE; i < LEVEL_NUM; i++) {
+        if (strcasecmp(LEVEL_STR[i], key) == 0) {
+
+            if (strcasecmp(value, "stdout") == 0)
                 *result = stdout;
-            else if (strcasecmp(value,"stderr")==0)
+            else if (strcasecmp(value, "stderr") == 0)
                 *result = stderr;
             else {
-                FILE* out= fopen(value,"a");
-                if (out==NULL) {
-                    printf("ERROR: log file %s open failed %d,check config\n",value,errno);
+                FILE *out = fopen(value, "a+");
+
+                if (out == NULL) {
+                    printf("ERROR: log file %s open failed %d,check config\n", value,errno);
                     *result = stdout;
-                }else *result = out;
+                } else *result = out;
             }
+
         }
     }
     return 0;
 }
 
 int logger_init() {
-    config_register_parser(LOG_SECTION,log_config_parser);
-    config_get(LOG_SECTION,KEY_LOG_LEVEL, (T*)&logging_level);
-   for (int i = logging_level;i<LEVEL_NUM;i++) {
-       output_channels[i]=stdout;
-       config_get(LOG_SECTION,LEVEL_STR[i],(T*)&output_channels[i]);
-   }
+    config_register_parser(LOG_SECTION, log_config_parser);
+    // 日志级别
+    config_get(LOG_SECTION,KEY_LOG_LEVEL, (T *) &logging_level);
+    // 日志输出通道
+    for (int i = logging_level; i < LEVEL_NUM; i++) {
+        output_channels[i] = stdout;
+        config_get(LOG_SECTION, LEVEL_STR[i], (T *) &output_channels[i]);
+    }
+
     return 0;
 }
 

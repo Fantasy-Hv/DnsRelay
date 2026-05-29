@@ -250,70 +250,70 @@ int dns_cache_init() {
  * @param record
  * @return 0-缓存成功 1-缓存失败
  */
-int dns_cache_put(const ResourceRecord * record) {
-    if (g_cache == NULL || record == NULL || record->name == NULL || record->ttl == 0) {
-        return 1;
-    }
-
-    char *key = cache_key_create(record->name, record->type, record->class);
-    if (key == NULL) {
-        return 1;
-    }
-
-    if (mtx_lock(&g_cache->lock) != thrd_success) {
-        free(key);
-        return 1;
-    }
-
-    // 每次写入前顺手清一次过期项，避免 size 被无效数据占满。
-    dns_cache_prune_locked();
-    if (g_cache->size >= g_cache->capacity) {
-        mtx_unlock(&g_cache->lock);
-        free(key);
-        return 1;
-    }
-
-    CacheEntry *entry = NULL;
-    if (hash_map_get(g_cache->table, key, (T *) &entry) != 0) {
-        // 首次出现这个查询键：新建一条缓存项，并挂到 table + entries 两个容器里。
-        entry = cache_entry_create(record);
-        if (entry == NULL) {
-            mtx_unlock(&g_cache->lock);
-            free(key);
-            return 1;
-        }
-        if (hash_map_put(g_cache->table, entry->key, entry) != 0) {
-            cache_entry_free(entry);
-            mtx_unlock(&g_cache->lock);
-            free(key);
-            return 1;
-        }
-        linked_list_addLast(g_cache->entries, entry);
-        g_cache->size++;
-    }
-
-    // 无论是新条目还是已有条目，都把 RR 副本追加进去。
-    ResourceRecord *copy_rr = rr_clone(record);
-    if (copy_rr == NULL) {
-        // 如果这是个刚创建但还没有任何 RR 的空条目，失败时要回滚删掉。
-        if (entry->records != NULL && vector_size(entry->records) == 0) {
-            cache_remove_entry(entry);
-        }
-        mtx_unlock(&g_cache->lock);
-        free(key);
-        return 1;
-    }
-    vector_add(entry->records, copy_rr);
-
-    const ms expire_at = sys_time_ms() + (ms) record->ttl * 1000;
-    // 同一查询键下可能会追加多条 RR。
-    // 这里取“更早过期”的时间，保证整组缓存不会比任何单条 RR 活得更久。
-    if (entry->expire_at == 0 || expire_at < entry->expire_at) {
-        entry->expire_at = expire_at;
-    }
-
-    mtx_unlock(&g_cache->lock);
-    free(key);
+int dns_cache_put(const char* qname,Qtype type,Class class,CacheValue cache_value) {
+    // if (g_cache == NULL || record == NULL || record->name == NULL || record->ttl == 0) {
+    //     return 1;
+    // }
+    //
+    // char *key = cache_key_create(record->name, record->type, record->class);
+    // if (key == NULL) {
+    //     return 1;
+    // }
+    //
+    // if (mtx_lock(&g_cache->lock) != thrd_success) {
+    //     free(key);
+    //     return 1;
+    // }
+    //
+    // // 每次写入前顺手清一次过期项，避免 size 被无效数据占满。
+    // dns_cache_prune_locked();
+    // if (g_cache->size >= g_cache->capacity) {
+    //     mtx_unlock(&g_cache->lock);
+    //     free(key);
+    //     return 1;
+    // }
+    //
+    // CacheEntry *entry = NULL;
+    // if (hash_map_get(g_cache->table, key, (T *) &entry) != 0) {
+    //     // 首次出现这个查询键：新建一条缓存项，并挂到 table + entries 两个容器里。
+    //     entry = cache_entry_create(record);
+    //     if (entry == NULL) {
+    //         mtx_unlock(&g_cache->lock);
+    //         free(key);
+    //         return 1;
+    //     }
+    //     if (hash_map_put(g_cache->table, entry->key, entry) != 0) {
+    //         cache_entry_free(entry);
+    //         mtx_unlock(&g_cache->lock);
+    //         free(key);
+    //         return 1;
+    //     }
+    //     linked_list_addLast(g_cache->entries, entry);
+    //     g_cache->size++;
+    // }
+    //
+    // // 无论是新条目还是已有条目，都把 RR 副本追加进去。
+    // ResourceRecord *copy_rr = rr_clone(record);
+    // if (copy_rr == NULL) {
+    //     // 如果这是个刚创建但还没有任何 RR 的空条目，失败时要回滚删掉。
+    //     if (entry->records != NULL && vector_size(entry->records) == 0) {
+    //         cache_remove_entry(entry);
+    //     }
+    //     mtx_unlock(&g_cache->lock);
+    //     free(key);
+    //     return 1;
+    // }
+    // vector_add(entry->records, copy_rr);
+    //
+    // const ms expire_at = sys_time_ms() + (ms) record->ttl * 1000;
+    // // 同一查询键下可能会追加多条 RR。
+    // // 这里取“更早过期”的时间，保证整组缓存不会比任何单条 RR 活得更久。
+    // if (entry->expire_at == 0 || expire_at < entry->expire_at) {
+    //     entry->expire_at = expire_at;
+    // }
+    //
+    // mtx_unlock(&g_cache->lock);
+    // free(key);
     return 0;
 }
 
@@ -324,54 +324,54 @@ int dns_cache_put(const ResourceRecord * record) {
  * @param result 结果列表，类型为T=ResourceRecord*,指向缓存中RR的拷贝，传入的列表必须有效,
  * @return 0-命中 ，1-miss
  */
-int dns_cache_get(const char* qname,Qtype type,Class qclass,Vector* result) {
-    if (g_cache == NULL || qname == NULL || result == NULL) {
-        return 1;
-    }
+int dns_cache_get(const char* qname,Qtype type,Class qclass,CacheValue* cache_value) {
+    // if (g_cache == NULL || qname == NULL || cache_value == NULL) {
+    //     return 1;
+    // }
+    //
+    // char *key = cache_key_create(qname, type, qclass);
+    // if (key == NULL) {
+    //     return 1;
+    // }
+    //
+    // if (mtx_lock(&g_cache->lock) != thrd_success) {
+    //     free(key);
+    //     return 1;
+    // }
+    //
+    // CacheEntry *entry = NULL;
+    // if (hash_map_get(g_cache->table, key, (T *) &entry) != 0) {
+    //     mtx_unlock(&g_cache->lock);
+    //     free(key);
+    //     return 1;
+    // }
+    //
+    // const ms now = sys_time_ms();
+    // if (entry->expire_at <= now) {
+    //     // 查到了但已经过期：顺手删掉，然后按 miss 返回。
+    //     cache_remove_entry(entry);
+    //     mtx_unlock(&g_cache->lock);
+    //     free(key);
+    //     return 1;
+    // }
+    //
+    // // 对客户端返回“剩余 TTL”，而不是缓存写入时的原始 TTL。
+    // const ms remain_ms = entry->expire_at - now;
+    // const uint32_t remain_ttl = (uint32_t) ((remain_ms + 999) / 1000);
+    // for (int i = 0; i < vector_size(entry->records); i++) {
+    //     ResourceRecord *copy_rr = rr_clone(vector_get(entry->records, i));
+    //     if (copy_rr == NULL) {
+    //         mtx_unlock(&g_cache->lock);
+    //         free(key);
+    //         return 1;
+    //     }
+    //     copy_rr->ttl = remain_ttl;
+    //     vector_add(result, copy_rr);
+    // }
 
-    char *key = cache_key_create(qname, type, qclass);
-    if (key == NULL) {
-        return 1;
-    }
-
-    if (mtx_lock(&g_cache->lock) != thrd_success) {
-        free(key);
-        return 1;
-    }
-
-    CacheEntry *entry = NULL;
-    if (hash_map_get(g_cache->table, key, (T *) &entry) != 0) {
-        mtx_unlock(&g_cache->lock);
-        free(key);
-        return 1;
-    }
-
-    const ms now = sys_time_ms();
-    if (entry->expire_at <= now) {
-        // 查到了但已经过期：顺手删掉，然后按 miss 返回。
-        cache_remove_entry(entry);
-        mtx_unlock(&g_cache->lock);
-        free(key);
-        return 1;
-    }
-
-    // 对客户端返回“剩余 TTL”，而不是缓存写入时的原始 TTL。
-    const ms remain_ms = entry->expire_at - now;
-    const uint32_t remain_ttl = (uint32_t) ((remain_ms + 999) / 1000);
-    for (int i = 0; i < vector_size(entry->records); i++) {
-        ResourceRecord *copy_rr = rr_clone(vector_get(entry->records, i));
-        if (copy_rr == NULL) {
-            mtx_unlock(&g_cache->lock);
-            free(key);
-            return 1;
-        }
-        copy_rr->ttl = remain_ttl;
-        vector_add(result, copy_rr);
-    }
-
-    mtx_unlock(&g_cache->lock);
-    free(key);
-    return 0;
+    // mtx_unlock(&g_cache->lock);
+    // free(key);
+    return 1;
 }
 
 
