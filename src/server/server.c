@@ -271,6 +271,15 @@ static int server_loop() {
     }
     return -1;
 }
+// 1不合法的输入，0合法的输入。
+int validate_ipstr(const char* ipstr) {
+    // 如果把上游服务器设置为本机，只要有一个请求需要转发，系统就会陷入自我收发的死循环，id迅速耗竭
+    if (!strcasecmp(ipstr,"localhost") || !strcasecmp(ipstr,"127.0.0.1") || !strcasecmp(ipstr,"::1")) {
+        ex_throw("upstream can't be localhost");
+        return 1;
+    }
+    return 0;
+}
 int server_config_parser(const char* key,const char* value,T* result) {
     if (!strcmp(key,KEY_UPSTREAMS)) { // value是上游列表
         int vl ;
@@ -288,7 +297,7 @@ int server_config_parser(const char* key,const char* value,T* result) {
                 memcpy(item,&value[i],j-i);
                 item[j-i]='\0';
                 NetEnd* end ;
-                if (ipstr2binary(item,&end)) {  // 解析失败
+                if (validate_ipstr(item)||ipstr2binary(item,&end)) {  // 解析失败
                     ex_throw("serv_config_parser:upstream failed");
                     return -1;
                 }

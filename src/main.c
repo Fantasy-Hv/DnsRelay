@@ -14,11 +14,26 @@ void print_help() {
     printf("-c <config_file_path>\n");
     printf("-d : run in debug mode\n");
     printf("-dd : run in trace mode\n");
-    printf("<ip list> : name server ips, separated by space\n");
+    printf("<ip_list> : name server ips, separated by space\n");
 }
-int parse_param(int argc,char* argv[]) {
-    int i=1;
+// 获取参数中的配置文件路径
+int param_get_config_file(int argc,char* argv[]) {
+
+    for (int i=1;i<argc;i++) {
+         if (!strcmp(argv[i],"-c")) {
+            // 那么下一个字符串是配置文件位置
+            if (++i<argc) {
+                config_file = argv[i];
+                return 0;
+            }
+            break;
+        }
+    }
+    return 1;
+}
+int param_inject_config(int argc,char* argv[]) {
     char ips[1024] = {0};
+    int i=1;
     while (i<argc) {
         if (!strcmp(argv[i],"-d")) {
             config_set(LOG_SECTION,KEY_LOG_LEVEL,(T)DEBUG);
@@ -26,11 +41,6 @@ int parse_param(int argc,char* argv[]) {
         }else if (!strcmp(argv[i],"-dd")) {
             config_set(LOG_SECTION,KEY_LOG_LEVEL,(T)TRACE);
             i++;
-        } else if (!strcmp(argv[i],"-c")) {
-            // 那么下一个字符串是配置文件位置
-            if (++i<argc)
-                config_file = argv[i++];
-            else return 1;
         } else { //什么标记都不带
             // dns域名服务器的ip
             strcat(ips,",");
@@ -43,45 +53,39 @@ int parse_param(int argc,char* argv[]) {
 }
 
 
-/**
- * @param -c <path> : 指定配置文件路径
- * 日志级别：
- *   -d debug
- *   -dd trace
- * @param -n : 域名服务器，后接域名服务器ip
- *
- * @brief 程序入口,负责解析命令行参数，以及各个模块的初始化
- * @return
- */
+
 int main(int argc,char* argv[]) {
+
+    //初始化配置系统
     if (config_init()) {
-        printf("fatal : config_init failed\n");
+        printf("[FATAL] config_init failed\n");
         return 1;
-    }printf("info : config_init \n");
-    //解析命令行参数
-    //注入命令行参数到配置层
-    if (parse_param(argc,argv)) {
-        print_help();
-        return 1;
-    }printf("info : param parsed \n");
-    if (config_load_file(config_file)) {
-        printf("warn: config file load err\n");
     }
-    if (logger_init()) {
-        printf("error : logger_init failed\n");
-    }printf("info : logger_init \n");
+    // 加载配置文件
+    param_get_config_file(argc,argv);
+    if (config_load_file(config_file))
+        printf("[WARN] config file load err,use default config\n");
+
+    //解析命令行参数，注入命令行参数到配置层
+     param_inject_config(argc,argv);
+
+    if (logger_init())
+        printf("[ERROR] logger_init failed\n");
+
     if (id_pool_init()) {
-        printf("fatal : id_pool_init failed\n");
+        printf("[FATAL;]  id_pool_init failed\n");
         return 1;
-    }printf("info : id pool init \n");
+    }
+
     if (dns_cache_init()) {
-        printf("fatal : dns_cache_init failed\n");
+        printf("[INFO]  dns_cache_init failed\n");
         return 1;
-    }printf("info : dns cache init \n");
+    }
+
     if (session_factory_init()) {
-        printf("fatal : session_factory_init failed\n");
+        printf("[FATAL]  session_factory_init failed\n");
         return 1;
-    }printf("info : session factory init \n");
+    }
 
     return server_start();
 }
