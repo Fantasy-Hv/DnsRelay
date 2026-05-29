@@ -203,6 +203,7 @@ void hash_map_free(HashMap* map);
  * @param map
  * @param key ，容器会存储这个key
  * @param data
+ * @param destructor 可选，key为指针时可以传这个释放内部存储的*key内存副本
    @return 0-key不存在于原本的map中，1-key存在于map中
  */
 int hash_map_put(HashMap* map,K key,T data);

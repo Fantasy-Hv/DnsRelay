@@ -146,6 +146,7 @@ typedef struct {
 //初始化一条RR记录
 ResourceRecord *rr_create();
 
+ResourceRecord *rr_clone(const ResourceRecord *record) ;
 /**
  * 根据ip映射配置项生成RR记录，以0.0.0.0=www.bilibili.com为例
  * type=A|AAAA 。

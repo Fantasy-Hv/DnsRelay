@@ -53,10 +53,9 @@ static void test_pack_create_and_free(void) {
     DnsPacket *p = pack_create();
     ASSERT_NOT_NULL(p);
     ASSERT_NOT_NULL(p->questions);
-    ASSERT_NOT_NULL(p->answers);
-    ASSERT_NOT_NULL(p->authorites);
-    ASSERT_NOT_NULL(p->additionals);
+    ASSERT_NOT_NULL(p->rrs);
     ASSERT_EQ(vector_size(p->questions), 0);
+    ASSERT_EQ(vector_size(p->rrs), 0);
     pack_free(p);
     TEST_PASS();
 }
@@ -127,7 +126,7 @@ static void test_serialize_deserialize_response(void) {
     rr->rdata = malloc(4);
     memcpy(rr->rdata, &ip, 4);
     rr->rdata_length = 4;
-    vector_add(resp->answers, rr);
+    vector_add(resp->rrs, rr);
 
     char buf[512] = {0};
     int len = pack_serialize(resp, buf,512);
@@ -139,8 +138,8 @@ static void test_serialize_deserialize_response(void) {
     ASSERT(restored->header.flags & 0x8000); // QR bit
     ASSERT_EQ(restored->header.qcount, 1);
     ASSERT_EQ(restored->header.answer_RRs, 1);
-    ASSERT_EQ(vector_size(restored->answers), 1);
-    ASSERT_EQ(((ResourceRecord*)vector_get(restored->answers, 0))->ttl, 3600);
+    ASSERT_EQ(vector_size(restored->rrs), 1);
+    ASSERT_EQ(((ResourceRecord*)vector_get(restored->rrs, 0))->ttl, 3600);
 
     pack_free(resp);
     pack_free(restored);
@@ -222,7 +221,14 @@ static void test_pack_make_response_relay(void) {
     DnsPacket *upstream_resp = pack_create();
     upstream_resp->header.id = 7777;
     QR_SET(upstream_resp->header.flags);
+    upstream_resp->header.qcount = 1;
     upstream_resp->header.answer_RRs = 1;
+
+    SectionQuestion *q = malloc(sizeof(SectionQuestion));
+    q->qname = strdup("\x07" "example" "\x03" "com" "\x00");
+    q->qtype = QTYPE_A;
+    q->qclass = QCLASS_IN;
+    vector_add(upstream_resp->questions, q);
 
     ResourceRecord *rr = rr_create();
     rr->name = strdup("\x07" "example" "\x03" "com" "\x00");
@@ -231,7 +237,7 @@ static void test_pack_make_response_relay(void) {
     rr->ttl = 60;
     rr->rdata = calloc(4, 1);
     rr->rdata_length = 4;
-    vector_add(upstream_resp->answers, rr);
+    vector_add(upstream_resp->rrs, rr);
 
     DnsPacket *client_resp = NULL;
     pack_make_response_relay(upstream_resp, &client_resp, 1234);
@@ -271,7 +277,7 @@ static void test_response_local_i_query_notimp(void) {
     query->header.qcount = 0;
 
     DnsPacket *resp = NULL;
-    PacketDirection dir = pack_make_response_local(query, &resp);
+    PacketDirection dir = pack_try_response_local(query, &resp);
     ASSERT_EQ(dir, CLIENT);
     ASSERT_NOT_NULL(resp);
     ASSERT_EQ(RCODE(resp->header.flags), RCODE_NOTIMP);
@@ -289,7 +295,7 @@ static void test_response_local_qcount_zero(void) {
     query->header.qcount = 0;
 
     DnsPacket *resp = NULL;
-    PacketDirection dir = pack_make_response_local(query, &resp);
+    PacketDirection dir = pack_try_response_local(query, &resp);
     ASSERT_EQ(dir, CLIENT);
     ASSERT_NOT_NULL(resp);
 

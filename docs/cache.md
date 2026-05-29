@@ -21,7 +21,7 @@ typedef struct CacheEntry {
     struct CacheEntry *colder;  // LRU：更冷（更久未被访问）的缓存条目
 } CacheEntry;
 ```
-
+a
 **语义说明**：
 
 | 字段 | 来源/含义                                                                   |
@@ -163,7 +163,7 @@ dns_cache_prune_locked()
 容量满时的淘汰流程：
 │
 ├─ 取 tail->hotter（最冷条目）
-├─ lru_remove + hash_map_remove + cache_entry_free
+├─ lru_remove（仅仅是将cache_entry摘出链表，没有任何free操作） + hash_map_remove + cache_entry_free
 ├─ size--
 └─ 为新条目腾出空间
 ```
@@ -194,11 +194,11 @@ static void lru_touch(DnsCache *cache, CacheEntry *entry) {
 int dns_cache_free() {
     mtx_lock(&g_cache->lock);
     // 遍历释放所有 entry
-    hash_map_foreach(g_cache->table, free_visitor, NULL);
+    hash_map_foreach(g_cache->table, free_visitor, NULL); // 这个visitor会free(hashmapEntry.key),并调用CacheEntry的析构函数
     mtx_unlock(&g_cache->lock);
 
     mtx_destroy(&g_cache->lock);
-    hash_map_free(g_cache->table);   // HashMap 已成空壳
+    hash_map_free(g_cache->table);   // 这里HashMap 已成空壳，只剩下内部的容器结构，不会指向任何外部添加的内存了。可以放心调用
     free(g_cache->head);
     free(g_cache->tail);
     free(g_cache);
@@ -232,11 +232,11 @@ iptable=./dnsrelay.txt
 20.3.5.3 = www.baidu.com,(c)a.shangfor.com
 ```
 
-| 语法 | 说明 |
-|------|------|
-| `#` 开头 | 注释 |
-| `IP = domains` | IP 可为 IPv4/IPv6；domains 逗号分隔 |
-| `(c)` 前缀 | CNAME 类型，rdata 指向同行第一个非 (c) 域名 |
+| 语法 | 说明                                              |
+|------|-------------------------------------------------|
+| `#` 开头 | 注释                                              |
+| `IP = domains` | IP 可为 IPv4/IPv6；domains 逗号分隔                    |
+| `(c)` 前缀 | 应该为此域名生成 CNAME 类型RR，rdata 指向同行第一个非 (c) 域名       |
 | `0.0.0.0` | 封禁：rdata 全零 → `query_post_validate` 返回 NXDOMAIN |
 
 ### 4.3 处理流程

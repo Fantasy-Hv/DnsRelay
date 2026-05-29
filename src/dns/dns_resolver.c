@@ -149,6 +149,37 @@ DnsPacket *pack_create() {
     return pack;
 }
 
+// 深拷贝RR
+ResourceRecord *rr_clone(const ResourceRecord *record) {
+    if (record == NULL) {
+        return NULL;
+    }
+
+    ResourceRecord *copy_rr = rr_create();
+    if (copy_rr == NULL) {
+        return NULL;
+    }
+
+    copy_rr->name = strdup(record->name);
+    copy_rr->type = record->type;
+    copy_rr->class = record->class;
+    copy_rr->ttl = record->ttl;
+    copy_rr->rdata_length = record->rdata_length;
+
+    if (copy_rr->name == NULL) {
+        rr_free(copy_rr);
+        return NULL;
+    }
+
+    copy_rr->rdata = malloc(record->rdata_length);
+    if (copy_rr->rdata == NULL) {
+        rr_free(copy_rr);
+        return NULL;
+    }
+    memcpy(copy_rr->rdata, record->rdata, record->rdata_length);
+    return copy_rr;
+}
+
 /**
  * 完备地克隆一个RR列表，
  * @param RRS
@@ -577,6 +608,7 @@ static int make_response_empty(const DnsPacket *query, DnsPacket **empty_respons
     DnsPacket *response = pack_create();
     response->header = query->header;
     RA_SET(response->header.flags);
+    QR_SET(response->header.flags);
     setRcode(response, RCODE_NOERROR);
     response->header.answer_RRs = 0;
     response->header.additional_RRs = 0;
@@ -727,6 +759,7 @@ PacketDirection pack_try_response_local(const DnsPacket *query, DnsPacket **resp
                 break;
             }
             // 查到缓存，构造响应包
+            do_log(DEBUG, "cache hit");
             pack_make_std_response_local(query, response, cache_value);
             free_rrs(cache_value.rrs);
             // 后置业务检查
@@ -736,7 +769,6 @@ PacketDirection pack_try_response_local(const DnsPacket *query, DnsPacket **resp
                 pack_free(*response);
                 make_response_fail(query, response, code);
             }
-            do_log(DEBUG, "cache hit");
             break;
 
         case IQUERY:
