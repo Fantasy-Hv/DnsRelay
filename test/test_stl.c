@@ -91,52 +91,52 @@ static void test_linked_list_add_and_remove(void) {
     TEST_PASS();
 }
 
-// =========== PriorityQueue ===========
+// =========== LazyHeap ===========
 static void test_pq_create_add_pop(void) {
     TEST("priority_queue add / pop");
-    PriorityQueue *pq = priority_queue_create(int_comparator);
+    LazyHeap *pq = lazy_heap_create(int_comparator);
     ASSERT_NOT_NULL(pq);
     int a = 5, b = 3, c = 8, d = 1;
-    priority_queue_add(pq, &a);
-    priority_queue_add(pq, &b);
-    priority_queue_add(pq, &c);
-    priority_queue_add(pq, &d);
-    ASSERT_EQ(*(int *)priority_queue_pop(pq), 1);
-    ASSERT_EQ(*(int *)priority_queue_pop(pq), 3);
-    ASSERT_EQ(*(int *)priority_queue_pop(pq), 5);
-    ASSERT_EQ(*(int *)priority_queue_pop(pq), 8);
-    ASSERT_NULL(priority_queue_pop(pq));
-    priority_queue_free(pq);
+    lazy_heap_add(pq,&a, &a);
+    lazy_heap_add(pq,&b, &b);
+    lazy_heap_add(pq,&c, &c);
+    lazy_heap_add(pq,&d, &d);
+    ASSERT_EQ(*(int *)lazy_heap_pop(pq), 1);
+    ASSERT_EQ(*(int *)lazy_heap_pop(pq), 3);
+    ASSERT_EQ(*(int *)lazy_heap_pop(pq), 5);
+    ASSERT_EQ(*(int *)lazy_heap_pop(pq), 8);
+    ASSERT_NULL(lazy_heap_pop(pq));
+    lazy_heap_free(pq);
     TEST_PASS();
 }
 
 static void test_pq_peek(void) {
     TEST("priority_queue peek");
-    PriorityQueue *pq = priority_queue_create(int_comparator);
+    LazyHeap *pq = lazy_heap_create(int_comparator);
     int a = 9, b = 2;
-    priority_queue_add(pq, &a);
-    priority_queue_add(pq, &b);
-    ASSERT_EQ(*(int *)priority_queue_peek(pq), 2);
-    ASSERT_EQ(*(int *)priority_queue_peek(pq), 2); // still 2
-    priority_queue_pop(pq);
-    ASSERT_EQ(*(int *)priority_queue_peek(pq), 9);
-    priority_queue_free(pq);
+    lazy_heap_add(pq, (K)a,&a);
+    lazy_heap_add(pq, (K)b,&b);
+    ASSERT_EQ(*(int *)lazy_heap_peek(pq), 2);
+    ASSERT_EQ(*(int *)lazy_heap_peek(pq), 2); // still 2
+    lazy_heap_pop(pq);
+    ASSERT_EQ(*(int *)lazy_heap_peek(pq), 9);
+    lazy_heap_free(pq);
     TEST_PASS();
 }
 
 static void test_pq_remove(void) {
     TEST("priority_queue remove (lazy delete)");
-    PriorityQueue *pq = priority_queue_create(int_comparator);
+    LazyHeap *pq = lazy_heap_create(int_comparator);
     int a = 7, b = 3, c = 5;
-    priority_queue_add(pq, &a);
-    priority_queue_add(pq, &b);
-    priority_queue_add(pq, &c);
-    priority_remove(pq, &b);
-    ASSERT_EQ(*(int *)priority_queue_peek(pq), 5);  // 3 is lazy-deleted
-    ASSERT_EQ(*(int *)priority_queue_pop(pq), 5);
-    ASSERT_EQ(*(int *)priority_queue_pop(pq), 7);
-    ASSERT_NULL(priority_queue_pop(pq));
-    priority_queue_free(pq);
+    lazy_heap_add(pq, &a,&a);
+    lazy_heap_add(pq, &b,&b);
+    lazy_heap_add(pq, &c,&c);
+    lazy_heap_remove(pq, &b);
+    ASSERT_EQ(*(int *)lazy_heap_peek(pq), 5);  // 3 is lazy-deleted
+    ASSERT_EQ(*(int *)lazy_heap_pop(pq), 5);
+    ASSERT_EQ(*(int *)lazy_heap_pop(pq), 7);
+    ASSERT_NULL(lazy_heap_pop(pq));
+    lazy_heap_free(pq);
     TEST_PASS();
 }
 

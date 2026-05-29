@@ -305,8 +305,8 @@ void linked_list_free(LinkedList* list) {
 //     int size; // 当前元素数量（包括逻辑删除的元素）
 //     int capacity; //当前容量
 
-// }PriorityQueue;
-static int heap_element_compare(const PriorityQueue *queue,
+// }LazyHeap;
+static int heap_element_compare(const LazyHeap *queue,
                                 const HeapElement *a,
                                 const HeapElement *b) {
     if (a == NULL || b == NULL) {
@@ -327,7 +327,7 @@ static int heap_element_compare(const PriorityQueue *queue,
     return queue->comparator(a->data, b->data);
 }
 
-static void down(PriorityQueue* queue,int u){
+static void down(LazyHeap* queue,int u){
     if (queue == NULL || u <= 0 || u > queue->size) {
         return;
     }
@@ -338,18 +338,18 @@ static void down(PriorityQueue* queue,int u){
         int right = u * 2 + 1;
 
         if (left <= queue->size &&
-            heap_element_compare(queue, &queue->elements[t], &queue->elements[left]) > 0) {
+            heap_element_compare(queue, queue->elements[t], queue->elements[left]) > 0) {
             t = left;
         }
 
         if (right <= queue->size &&
-            heap_element_compare(queue, &queue->elements[t], &queue->elements[right]) > 0) {
+            heap_element_compare(queue, queue->elements[t], queue->elements[right]) > 0) {
             t = right;
         }
         if (t == u) {
             return;
         }
-        HeapElement temp = queue->elements[t];
+        HeapElement* temp = queue->elements[t];
         queue->elements[t] = queue->elements[u];
         queue->elements[u] = temp;
 
@@ -357,15 +357,15 @@ static void down(PriorityQueue* queue,int u){
     }
 }
 
-static void up(PriorityQueue* queue,int u){
+static void up(LazyHeap* queue,int u){
     if (queue == NULL || u <= 0 || u > queue->size) {
         return;
     }
 
     while (1) {
         int t = u / 2;
-        if (t && heap_element_compare(queue, &queue->elements[u], &queue->elements[t]) < 0) {
-            HeapElement temp = queue->elements[t];
+        if (t && heap_element_compare(queue, queue->elements[u], queue->elements[t]) < 0) {
+            HeapElement* temp = queue->elements[t];
             queue->elements[t] = queue->elements[u];
             queue->elements[u] = temp;
             u = t;
@@ -375,7 +375,7 @@ static void up(PriorityQueue* queue,int u){
     }
 }
 
-static int priority_queue_grow(PriorityQueue* queue,int min_capacity) {
+static int priority_queue_grow(LazyHeap* queue,int min_capacity) {
     if (queue == NULL) {
         return 0;
     }
@@ -393,7 +393,7 @@ static int priority_queue_grow(PriorityQueue* queue,int min_capacity) {
         temp_capacity <<= 1;
     }
 
-    HeapElement* temp = realloc(queue->elements, sizeof(HeapElement) * (size_t)(temp_capacity + 1));
+    HeapElement** temp = realloc(queue->elements, sizeof(HeapElement*) * (size_t)(temp_capacity + 1));
     if (temp == NULL) {
         return 0;
     }
@@ -402,23 +402,24 @@ static int priority_queue_grow(PriorityQueue* queue,int min_capacity) {
     return 1;
 }
 
-PriorityQueue* priority_queue_create(Comparator comparator) {
+LazyHeap* lazy_heap_create(Comparator comparator) {
     if (comparator == NULL) {
         return NULL;
     }
-    PriorityQueue* queue = malloc(sizeof(PriorityQueue));
+    LazyHeap* queue = malloc(sizeof(LazyHeap));
     if (queue == NULL) {
         return NULL;
     }
 
     const int init_capacity = 16;
-    queue->elements = malloc(sizeof(HeapElement) * (init_capacity + 1));
+    queue->elements = malloc(sizeof(HeapElement*) * (init_capacity + 1));
     if (queue->elements == NULL) {
         free(queue);
         return NULL;
     }
     queue->comparator = comparator;
     queue->capacity = init_capacity;
+    queue->survivor_table = hash_map_create(hash_func_uint64,compare_uint);
     queue->size = 0;
     return queue;
 }
@@ -429,7 +430,7 @@ PriorityQueue* priority_queue_create(Comparator comparator) {
  * @param queue
  * @param data
  */
-void priority_queue_add(PriorityQueue* queue,T data) {
+void lazy_heap_add(LazyHeap* queue,K key,T data) {
     if (queue == NULL) {
         return;
     }
@@ -439,16 +440,20 @@ void priority_queue_add(PriorityQueue* queue,T data) {
     }
 
     queue->size ++;
-    queue->elements[queue->size].data = data;
-    queue->elements[queue->size].is_deleted = 0;
+    HeapElement *element = malloc(sizeof(HeapElement));
+    element->data = data;
+    element->is_deleted = 0;
+    queue->elements[queue->size]=element;
+    hash_map_put(queue->survivor_table,key,element);
+
     up(queue,queue->size);
 }
 
-static void lazy_delete(PriorityQueue* queue) {
+static void do_delete(LazyHeap* queue) {
     if (queue == NULL) {
         return;
     }
-    while (queue->size > 0 && queue->elements[1].is_deleted == 1) {
+    while (queue->size > 0 && queue->elements[1]->is_deleted == 1) {
         queue->elements[1] = queue->elements[queue->size];
         queue->size--;
         down(queue, 1);
@@ -456,50 +461,56 @@ static void lazy_delete(PriorityQueue* queue) {
 }
 
 //取最小的元素，如果队列为空，返回NULL
-T priority_queue_pop(PriorityQueue* queue) {
+T lazy_heap_pop(LazyHeap* queue) {
     if (queue == NULL || queue->size == 0) {
         return NULL;
     }
-    lazy_delete(queue);
+    do_delete(queue);
 
     if (queue->size == 0) {
         return NULL;
     }
-    HeapElement temp_element = queue->elements[1];
+    HeapElement* temp_element = queue->elements[1];
     queue->elements[1] = queue->elements[queue->size--];
     down(queue, 1);
-    return temp_element.data;
+    return temp_element->data;
 }
-T priority_queue_peek(PriorityQueue* queue) {
+T lazy_heap_peek(LazyHeap* queue) {
     if (queue == NULL || queue->size == 0) {
         return NULL;
     }
-    lazy_delete(queue);
+    do_delete(queue);
 
     if (queue->size == 0) {
         return NULL;
     }
-    return queue->elements[1].data;
+    return queue->elements[1]->data;
 }
+
+
 /**
  * 删除所有值为data的元素，懒删除，标记目标元素即可
  * @param queue
  * @param data
  */
-void priority_remove(PriorityQueue* queue,T data) {
+void lazy_heap_remove(LazyHeap* queue,K key) {
     if (queue == NULL || queue->comparator == NULL) {
         return;
     }
-    for (int i = 1; i <= queue->size; i++) {
-        if (queue->comparator(queue->elements[i].data, data) == 0) {
-            queue->elements[i].is_deleted = 1;
-        }
+
+    HeapElement * element;
+    if (!hash_map_get(queue->survivor_table,key,(T*)&element)) {
+        element->is_deleted = 1;
+        // 到这里，这个哈希条目的任务就完成了
+        hash_map_remove(queue->survivor_table,key,NULL);
     }
+
 }
-void priority_queue_free(PriorityQueue* queue) {
+void lazy_heap_free(LazyHeap* queue) {
     if (queue == NULL) {
         return;
     }
+    hash_map_free(queue->survivor_table); // hashmap里面的东西都只是纯数字，不需要释放
     free(queue->elements);
     free(queue);
 }

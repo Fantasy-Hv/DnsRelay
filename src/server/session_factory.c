@@ -12,7 +12,7 @@
 
 
 static HashMap *agent_id_sessions; // 用于根据上游请求获取会话
-static PriorityQueue *sessions_queue; //用于超时管理
+static LazyHeap *sessions_queue; //用于超时管理
 
 /**
  * 会话比较函数，用于给会话排序、判等
@@ -36,9 +36,10 @@ static int session_comparator(void* a, void* b) {
 }
 
 
+
 int session_factory_init() {
-    sessions_queue = priority_queue_create(session_comparator);
-    agent_id_sessions = hash_map_create(hash_uint16_t,compare_uint16);
+    sessions_queue = lazy_heap_create(session_comparator);
+    agent_id_sessions = hash_map_create(hash_func_uint64,compare_uint);
     return !sessions_queue || !agent_id_sessions;
 }
 
@@ -53,9 +54,7 @@ Session * session_get(const DnsPacket* relay_response) {
         return NULL;
     return ses;
 }
-void session_id_key_destructor(K key) {
-    // 因为key是纯数字，不是指针，所以不需要释放
-}
+
 /**
  * 关闭中继请求的会话
  * @param session
@@ -63,9 +62,9 @@ void session_id_key_destructor(K key) {
  void session_close(Session *session) {
     do_log(DEBUG,"ses close for cli-%d,reid-%d",session->client_id,session->relay_info.relay_packet->header.id);
     K key = (K)session->relay_info.relay_packet->header.id; // relay_id
-    hash_map_remove(agent_id_sessions,key,session_id_key_destructor);
+    lazy_heap_remove(sessions_queue,(K)(session->client_id+session->relay_info.timestamp));
+    hash_map_remove(agent_id_sessions,key,NULL);
     //可以释放，因为队列里实际上存的是指针而不是会话，
-    priority_remove(sessions_queue,session);
     pack_free(session->relay_info.relay_packet);
     free(session);
 }
@@ -91,7 +90,7 @@ void session_id_key_destructor(K key) {
  * @return
  */
 Session* session_peek() {
-    return  priority_queue_peek(sessions_queue);
+    return  lazy_heap_peek(sessions_queue);
 }
 
 /**
@@ -100,13 +99,16 @@ Session* session_peek() {
  * @return
  */
 int session_wait(Session *session){
-    session->relay_info.timestamp = sys_time_ms();
+
     //直接修改堆元素的排序key,堆无法感知元素变化，这会破坏堆结构
     //因此需要将原来的元素删除后重新添加，以此维护正确的大小顺序。
-    //删除原有引用
-    priority_remove(sessions_queue,session);
-    //添加新引用
-    priority_queue_add(sessions_queue,session);
+
+    lazy_heap_remove(sessions_queue,(K)(session->client_id+session->relay_info.timestamp));
+
+    session->relay_info.timestamp = sys_time_ms();
+
+    lazy_heap_add(sessions_queue,(K)(session->client_id+session->relay_info.timestamp),session);
+
     return 0;
 }
 

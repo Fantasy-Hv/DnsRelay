@@ -188,8 +188,8 @@ TRACE < DEBUG < INFO < WARN < ERROR
 
 #### 实现细节
 
-- 日志过滤级别通过配置中心 `log_level` 读取，默认为 `INFO`
-- 各级别输出流向用 `output_channels[level]` 数组管理，目前全部输出到 `stdout`
+- 日志过滤级别通过配置中心 读取`log_level` ，默认为 `INFO`
+- 各级别输出流向用 `output_channels[level]` 数组管理，并且可以通过配置文件指定
 - `do_log()` 在格式化内容前自动追加时间戳（单调时钟毫秒→秒）和日志级别标签
 - 配置解析器 `log_config_parser` 通过字符串大小写不敏感匹配解析日志级别
 
@@ -206,7 +206,7 @@ TRACE < DEBUG < INFO < WARN < ERROR
 不支持行尾注释
 
 ```ini
-# comment ,only support ascii code
+# comment 
 [section1]
 key1 = value2
 key2 = value2
@@ -342,9 +342,7 @@ DnsPacket
 │   ├── qcount (问题数)
 │   ├── answer_RRs, authority_RRs, additional_RRs
 ├── questions: Vector<SectionQuestion*>
-├── answers: Vector<ResourceRecord*>
-├── authorites: Vector<ResourceRecord*>
-└── additionals: Vector<ResourceRecord*>
+├── rrs: Vector<ResourceRecord*> (三个段的RR,通过头部的计数字段进行逻辑分隔)
 ```
 
 #### Header Flags 解析
@@ -375,9 +373,17 @@ DnsPacket
 - RR：name 支持压缩指针（以 `0xc0` 开头），后面依次为 type(2B) + class(2B) + ttl(4B) + rdlength(2B) + rdata(variable)
 - 序列化时实现**域名指针压缩**：从 Header 之后扫描已输出的字节，若发现相同的 name 字符串，使用 2 字节指针（`0xc000 | offset`）替代完整域名
 
+#### RR 构造函数
+
+| 函数                       | 用途                                              |
+|--------------------------|-------------------------------------------------|
+| `rr_create()`            | 分配空白 ResourceRecord                             |
+| `rr_clone(record)`       | 深拷贝一条 RR（name 通过 strdup，rdata 通过 malloc+memcpy） |
+| `rrs_clone(Vector* rrs)` | 批量深拷贝 RR（name 通过 strdup，rdata 通过 malloc+memcpy） |
+
 #### 包构造逻辑
 
-**`pack_make_response_local()` — 本地应答决策**：
+**`pack_try_response_local()` — 本地应答决策**：
 
 ```
 switch (OPCODE):
@@ -385,18 +391,18 @@ switch (OPCODE):
     1. 检查 qcount（必须为 0 或 1，否则返回 NOTIMP）
     2. 前置业务检查 (query_pre_validate)
     3. 查缓存 (dns_cache_get)
-       ├── 命中 → 构造标准响应
+       ├── 命中 → 构造标准响应 (pack_make_std_response_local)
        │          └── 后置业务检查 (query_post_validate: 拦截 0.0.0.0)
        └── 未命中 → 检查 RD 标志
                     ├── RD=1 → 返回 UPSTREAM（需转发）
                     └── RD=0 → 返回空响应
   case IQUERY: 返回 NOTIMP
-  case STATUS: 返回 NOTIMP
+  case STATUS: 构造状态响应 (make_response_status)
 ```
 
 **`pack_make_query_relay()`**：克隆查询包，替换 ID 为中继 ID
 
-**`pack_make_response_relay()`**：克隆上游响应，替换 ID 为客户端 ID，同时提取 answer RRs 写入缓存
+**`pack_make_response_relay()`**：克隆上游响应，替换 ID 为客户端 ID，同时提取 rr 写入缓存
 
 #### 错误响应构造
 
@@ -410,7 +416,7 @@ switch (OPCODE):
 
 **文件**：`include/dns/cache.h`, `src/dns/dns_cache.c`
 
-负责 DNS 资源记录的缓存管理，线程安全的全局单例。
+负责 DNS 资源记录的缓存管理，线程安全的全局单例。采用 **HashMap + LRU 双向链表** 组合，实现 O(1) 存取和淘汰以及O(n)过期检查。
 
 #### 缓存键
 
@@ -424,46 +430,84 @@ switch (OPCODE):
 #### 数据结构
 
 ```c
+CacheValue (协议层与缓存层的数据交互模型)
+├── answer_RRs: uint16_t     // Answer 段 RR 数量
+├── authority_RRs: uint16_t  // Authority 段 RR 数量
+├── additional_RRs: uint16_t // Additional 段 RR 数量
+└── rrs: Vector<ResourceRecord*> // 所有 RR（按 answer/auth/add 顺序排列）
+
+CacheEntry (单条缓存条目)
+├── key: char*               // 格式 "qclass|qtype|qname"（自有拷贝）
+├── value: CacheValue         // 内嵌，存放深拷贝后的 RR 列表
+├── created_at: ms            // 缓存写入时刻（单调毫秒时间戳）
+├── hotter: CacheEntry*       // LRU 更热（更近被访问）指针
+└── colder: CacheEntry*       // LRU 更冷（更久未被访问）指针
+
 DnsCache (全局单例 g_cache)
-├── table: HashMap<char*, CacheEntry*>  // 按 key 快速定位
-├── entries: LinkedList<CacheEntry*>    // 用于过期遍历清理
-├── lock: mtx_t                         // 线程安全
+├── table: HashMap<char*, CacheEntry*>  // O(1) 按键定位
+├── head: CacheEntry*                   // LRU 哨兵节点（malloc，不持有数据）
+├── tail: CacheEntry*                   // LRU 哨兵节点（malloc，不持有数据）
+├── lock: mtx_t                         // 互斥锁，保证线程安全
 ├── size: int                           // 当前条目数
 └── capacity: int (默认 1024)
 ```
 
-每个 `CacheEntry` 对应一个查询三元组，持有该查询的所有 RR 副本（Vector）。
+**LRU 不变量**：
+- `head->colder` 指向最热条目，`tail->hotter` 指向最冷条目
+- 空链表时：`head->colder = tail`，`tail->hotter = head`
+- 哨兵为独立 `malloc` 分配，不存储实际数据，边界操作无需判空
 
 #### 核心操作
 
-**`dns_cache_put(record)`**：
+**`dns_cache_put(qname, type, class, cache_value)`**：
 
-1. 构造缓存键
-2. 加锁
-3. 先执行一次 prune 清理过期项
-4. 检查容量（超过 `capacity` 则拒绝写入）
-5. 若 key 不存在 → 创建 CacheEntry，同时加入 HashMap 和 LinkedList
-6. 深拷贝 RR (`rr_clone`) 追加到 entry 的 records 列表
-7. 更新过期时间（取更早过期者）
-8. 解锁
-
-RR 采用**深拷贝**存储：`name` 通过 `strdup`，`rdata` 通过 `malloc` + `memcpy`，缓存层不依赖调用方的内存。
+1. 参数校验：`qname == NULL` 或 `cache_value.rrs == NULL` 返回 1
+2. 构造查询键 `"class|type|qname"`
+3. 加锁 → 先执行 `prune_locked()` 清理过期条目腾空间
+4. 查找是否已有该 key 的条目：
+   - **已存在** → 释放旧 `value.rrs`，深拷贝新 CacheValue，更新 `created_at`，LRU 移至头部
+   - **不存在** → 容量检查（`size >= capacity` 时淘汰 `tail->hotter` 最冷条目）→ 创建 CacheEntry（深拷贝所有 RR + 记录时间戳）→ HashMap 插入 + LRU 头插 → `size++`
+5. 解锁 → 返回 0
 
 **`dns_cache_get(qname, type, class, result)`**：
 
-1. 构造缓存键，加锁
-2. HashMap 查找 entry
-3. 若未命中或已过期 → 过期时顺带删除 entry，返回 miss
-4. 命中 → 深拷贝所有 RR 并计算剩余 TTL（`expire_at - now`），写入 result 列表
-5. 解锁返回
+1. 参数校验 → 构造键 → 加锁
+2. HashMap 查找 CacheEntry → 未找到返回 miss (1)
+3. 过期检查：遍历 `entry->value.rrs` 中每条 RR，若 `(now - created_at) / 1000 >= rr->ttl` 则整条过期 → 删除 entry → 返回 miss
+   - `ttl == UINT32_MAX` 的 RR 永不触发过期条件（用于 IP 映射表）
+4. 命中 → 深拷贝所有 RR 到 `result`（`rr_clone` 拷贝，保留原始 TTL）→ LRU 移至头部 → 解锁 → 返回 hit (0)
 
-**TTL 处理**：缓存存储绝对过期时间戳（毫秒），查询时计算剩余 TTL 返回给客户端，保证返回的 TTL 值随时间递减。
+**`dns_cache_prune()`**：遍历 LRU 链表 `head → ... → tail`，对每个条目调用 `is_entry_expired()`，已过期则 `cache_remove_entry()`（同时清理 HashMap 和 LRU 链表引用并释放内存）。
 
-**`dns_cache_prune()`**：遍历 `entries` 链表，删除所有 `expire_at <= now` 的条目。`cache_remove_entry` 同时清理 HashMap 和 LinkedList 中的引用。
+**LRU 条目淘汰**：
+- 容量满时，取 `tail->hotter`（最冷条目）执行 `cache_remove_entry`
+- **LRU 位置更新**规则：
+  - `put` 新条目 → 头插到 `head` 之后
+  - `put` 覆盖已有条目 → 摘出后头插（写入视为新访问）
+  - `get` 命中 → 摘出后头插
+
+#### 内存所有权
+
+一个缓存条目涉及两份独立的 key 拷贝：
+
+| 持有者            | 来源                            | 何时释放                        |
+| --------------- | ----------------------------- | --------------------------- |
+| `HashMapEntry.key` | `strdup(CacheEntry.key)`      | `hash_map_remove(..., free)` |
+| `CacheEntry.key`   | `cache_key_create()` 中动态分配   | `cache_entry_free()`         |
+
+**禁止共享指针**：`hash_map_put(map, entry->key, entry)` 会使双方指向同一内存，任意方释放后另一方持有野指针。
 
 #### 线程安全
 
-所有公开 API 通过 `mtx_lock`/`mtx_unlock` 保护 `g_cache` 的访问。`dns_cache_prune_locked()` 供内部在已持有锁的场景下复用。
+所有公开 API 通过 `mtx_lock`/`mtx_unlock` 保护 `g_cache` 的访问：
+
+| 操作                       | 锁策略              |
+| ------------------------ | ---------------- |
+| `dns_cache_put`          | 全程持锁（内部调 prune_locked） |
+| `dns_cache_get`          | 全程持锁（clone + LRU 移动） |
+| `dns_cache_prune`        | 加锁 → prune_locked → 解锁 |
+| `dns_cache_load_ip_table` | 内部每次 put 自动加锁      |
+| `dns_cache_free`         | 加锁遍历释放 → 解锁销毁      |
 
 ---
 
@@ -532,7 +576,7 @@ server_start()
 ```
 packet_is_query(packet_in)?
   ├── [是查询包]
-  │   ├── pack_make_response_local() → 本地可应答?
+  │   ├── pack_try_response_local() → 本地可应答?
   │   │   ├── [CLIENT] → packet_send → pack_free
   │   │   └── [UPSTREAM]
   │   │        ├── id_alloc(&relay_id)
@@ -613,7 +657,7 @@ sessions_queue: PriorityQueue<Session*>
 
 1. 分配 Session，设置 client_id、client_ip
 2. 深拷贝中继包到 `relay_info.relay_packet`
-3. 以 relay_id 为 key 存入 `agent_id_sessions`
+3. 以 relay_id 为 key 存入 `relay_id_sessions`
 4. 调用 `session_wait()` 启动计时
 
 **`session_wait()`**：
@@ -625,11 +669,11 @@ sessions_queue: PriorityQueue<Session*>
 
 **`session_close()`**：
 
-1. 从 `agent_id_sessions` 中移除
+1. 从 `relay_id_sessions` 中移除
 2. 从 `sessions_queue` 中懒删除
 3. 释放中继包副本和 Session 本身
 
-**`session_get(relay_response)`**：以响应的 `header.id` 为 key 在 `agent_id_sessions` 中查找
+**`session_get(relay_response)`**：以响应的 `header.id` 为 key 在 `relay_id_sessions` 中查找
 
 **`session_peek()`**：返回优先队列堆顶元素（最早超时的会话）
 
@@ -673,11 +717,12 @@ dnsrelay [-d | -dd] [-c <config_file>] [upstream_ips...]
 ```
 main()
   ├── config_init()            → 初始化配置中心的数据容器
-  ├── parse_param()            → 解析命令行参数并注入配置
+  ├── param_get_config_file()  → 获取配置文件路径
   ├── config_load_file()       → 加载配置文件
-  ├── logger_init()            → 注册日志配置解析器 + 读取日志级别
+  ├── parse_param()            → 注入命令行参数到配置系统
+  ├── logger_init()            → 注册日志配置解析器 + 读取日志配置
   ├── id_pool_init()           → 初始化 ID 栈
-  ├── dns_cache_init()         → 创建缓存单例（HashMap + LinkedList + 互斥锁）
+  ├── dns_cache_init()         → 创建缓存单例（HashMap + LRU 双向链表 + 互斥锁）+ 加载ip映射表
   ├── session_factory_init()   → 创建会话存储（HashMap + PriorityQueue）
   └── server_start()           → 进入主事件循环
 ```
@@ -706,6 +751,7 @@ main()
 
 配置值首次读取时才解析，而非加载时全量解析：
 
+- 为上层解析器的注册提供时机
 - 减少启动时的内存分配
 - 未被使用的配置项不会产生解析开销
 - 命令行注入的原始字符串和配置文件中的字符串统一走延迟解析流程
@@ -720,10 +766,10 @@ main()
 
 ### 6.4 优先队列懒删除
 
-会话超时管理中使用优先队列 + 标记删除，而非在删除时调整堆：
+会话超时管理中使用 懒删除堆（小顶堆+哈希表）：
 
 - 避免 O(n) 的堆内搜索和重建
-- 删除操作 O(n) 标记 + 出队时 O(log n) 清理，均摊效率更高
+- 删除操作 O(1) 标记 + 出队时 O(log n) 清理，效率更高
 - 通过"删旧标记 + 重新入队"方式更新会话时间戳
 
 ### 6.5 RR 深拷贝的缓存策略
@@ -731,35 +777,32 @@ main()
 缓存模块对所有存入的 RR 进行深拷贝：
 
 - 缓存层和调用方内存完全隔离，无悬挂指针风险
-- 返回给客户端时再次深拷贝 + 更新 TTL，保证数据一致性
+- 返回给客户端时再次深拷贝（`rr_clone`），保证数据一致性
 - 代价是额外的 `malloc`/`memcpy`，但 DNS 数据量小（通常 < 512 字节），可接受
 
-### 6.6 IPv6 双栈单 Socket
+### 6.6 LRU 双向链表 + HashMap 组合索引
 
-创建 IPv6 双栈 socket 而非分别创建 IPv4/IPv6 socket：
+缓存淘汰采用 LRU 策略而非简单的 LinkedList 遍历：
 
-- 单 socket 配合 select 模型，简化事件循环
-- `IPV6_V6ONLY=0` 允许接收 IPv4 映射地址
-- 收包时通过 `IN6_IS_ADDR_V4MAPPED` 区分客户端的真实 IP 版本
-- 发包时根据目标 IP 版本构造对应的 `sockaddr_in` 或 `sockaddr_in6`
-
----
+- HashMap 提供 O(1) 的 key 查找，LRU 双向链表提供 O(1) 的"最热/最冷"位置操作
+- 哨兵节点（head/tail）避免空链表和边界 case 的判空判断，所有插入/删除操作统一处理
+- prune 过期清理直接遍历 LRU 链表（从最热到最冷），无需 HashMap 遍历，复杂度 O(n)
+- 淘汰时取 `tail->hotter` 即可定位最冷条目，O(1)
 
 ## 七、配置参考
 
-### 完整配置示例
+### 完整配置示例 (dnsrelay.ini)
 
 ```ini
-[log]
-log_level = DEBUG
-
 [server]
-server_port = 53
-dns_packet_timeout = 3
-max_retry_time = 2
-server_upstream = 8.8.8.8,114.114.114.114
+server_upstream=10.3.9.6
+dns_packet_timeout=1
+max_retry_time=1
+[dns]
+iptable=./dnsrelay.txt
+[log]
+log_level=TRACE
+DEBUG=./debug.txt
+TRACE=./debug.txt
 ```
 
-### 地址映射文件 (dnsrelay.txt)
-
-格式为标准配置文件的 section 形式（具体格式由 `config_load_file` 解析）。
