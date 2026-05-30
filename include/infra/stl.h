@@ -25,11 +25,11 @@ static inline int hash_func_uint64(K key) {
     return x;
 }
 static inline int compare_uint(T a,T b) {
-    return a-b;
+    return a>b ? 1: a==b ? 0: -1;
 }
 
 static inline int hash_func_str(K key) {
-    const unsigned char *str = (const unsigned char *) key;
+    const unsigned char *str =key;
     int hash = 5381;
     while (*str) {
         hash = ((hash << 5) + hash) + *str;
@@ -42,7 +42,7 @@ static inline int compare_cstr(T a,T b) {
     if (a == NULL && b == NULL) return 0;
     if (a == NULL) return -1;
     if (b == NULL) return 1;
-    return strcmp((const char *) a, (const char *) b);
+    return strcmp(a, b);
 }
 #define hash_uint16_t hash_func_uint16
 //----------------向量--------------

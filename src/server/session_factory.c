@@ -24,7 +24,7 @@ static LazyHeap *sessions_queue; //用于超时管理
 static int session_comparator(void* a, void* b) {
     //时间早的放前面
     if (a==NULL)return -1;
-    if (b==NULL)return -1;
+    if (b==NULL)return 1;
     Session* a_session = a;
     Session* b_session = b;
     long long interval = a_session->relay_info.timestamp - b_session->relay_info.timestamp;
@@ -62,7 +62,7 @@ Session * session_get(const DnsPacket* relay_response) {
  void session_close(Session *session) {
     do_log(DEBUG,"ses close for cli-%d,reid-%d",session->client_id,session->relay_info.relay_packet->header.id);
     K key = (K)session->relay_info.relay_packet->header.id; // relay_id
-    lazy_heap_remove(sessions_queue,(K)(session->client_id+session->relay_info.timestamp));
+    lazy_heap_remove(sessions_queue,key);
     hash_map_remove(agent_id_sessions,key,NULL);
     //可以释放，因为队列里实际上存的是指针而不是会话，
     pack_free(session->relay_info.relay_packet);
@@ -102,12 +102,12 @@ int session_wait(Session *session){
 
     //直接修改堆元素的排序key,堆无法感知元素变化，这会破坏堆结构
     //因此需要将原来的元素删除后重新添加，以此维护正确的大小顺序。
-
-    lazy_heap_remove(sessions_queue,(K)(session->client_id+session->relay_info.timestamp));
+    // 按照relay_id删除原来的条目，hashmap中的条目也会删除，因为已经成功标记旧条目失效了，hashmap里的条目是存未删除的。
+    lazy_heap_remove(sessions_queue,(K)(session->relay_info.relay_packet->header.id));
 
     session->relay_info.timestamp = sys_time_ms();
 
-    lazy_heap_add(sessions_queue,(K)(session->client_id+session->relay_info.timestamp),session);
+    lazy_heap_add(sessions_queue,(K)(session->relay_info.relay_packet->header.id),session);
 
     return 0;
 }

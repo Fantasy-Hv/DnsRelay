@@ -450,10 +450,9 @@ void lazy_heap_add(LazyHeap* queue,K key,T data) {
 }
 
 static void do_delete(LazyHeap* queue) {
-    if (queue == NULL) {
-        return;
-    }
+
     while (queue->size > 0 && queue->elements[1]->is_deleted == 1) {
+        free(queue->elements[1]);
         queue->elements[1] = queue->elements[queue->size];
         queue->size--;
         down(queue, 1);
@@ -470,10 +469,11 @@ T lazy_heap_pop(LazyHeap* queue) {
     if (queue->size == 0) {
         return NULL;
     }
-    HeapElement* temp_element = queue->elements[1];
+    HeapElement temp_element = *queue->elements[1];
+    free(queue->elements[1]);
     queue->elements[1] = queue->elements[queue->size--];
     down(queue, 1);
-    return temp_element->data;
+    return temp_element.data;
 }
 T lazy_heap_peek(LazyHeap* queue) {
     if (queue == NULL || queue->size == 0) {
@@ -670,7 +670,7 @@ void hash_map_free(HashMap* map) {
 
 
 int hash_map_put(HashMap* map,K key,T data) {
-    if (map == NULL || key == NULL) {
+    if (map == NULL) {
         return 1;
     }
 
@@ -701,7 +701,7 @@ int hash_map_put(HashMap* map,K key,T data) {
 }
 
 int hash_map_get(HashMap* map,K key,T* result) {
-    if (map == NULL || key == NULL || result == NULL) {
+    if (map == NULL || result == NULL) {
         return 1;
     }
 
@@ -720,7 +720,7 @@ int hash_map_get(HashMap* map,K key,T* result) {
 }
 
 void hash_map_remove(HashMap* map,K key,KeyDestructor destructor) {
-    if (map == NULL || key == NULL) {
+    if (map == NULL ) {
         return;
     }
 
