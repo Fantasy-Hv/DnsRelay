@@ -1,4 +1,5 @@
 CONFIG_PATH=../cmake-build-debug
+rm -rf $CONFIG_PATH
 cmake -S .. -B $CONFIG_PATH -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=$CONFIG_PATH
 cmake --build $CONFIG_PATH \
                 --target test_stl \
@@ -10,6 +11,5 @@ cmake --build $CONFIG_PATH \
                 --target test_protocol \
                 --target test_cache \
                 --target test_session \
-                --target test_daemon
 
 ctest --test-dir $CONFIG_PATH

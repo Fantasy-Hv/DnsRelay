@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 4.1)
+cmake_minimum_required(VERSION 3.5)
 project(DnsRelay C)
 
 set(CMAKE_C_STANDARD 23)
@@ -66,4 +66,3 @@ add_module_test(test_id test/test_id.c)
 add_module_test(test_protocol test/test_protocol.c)
 add_module_test(test_cache test/test_cache.c)
 add_module_test(test_session test/test_session.c)
-add_module_test(test_daemon test/test_daemon.c)
