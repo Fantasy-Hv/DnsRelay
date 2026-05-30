@@ -1,0 +1,11 @@
+# 封禁域名
+www.github.com=0.0.0.0
+qq.com=0.0.0.0
+# 静态 DNS 映射 (IPv4)
+www.baidu.com=20.3.5.3
+www.bilibili.com=121.194.11.72
+www.bilibili.com=121.194.11.73
+www.bilibili.com=121.194.11.74
+www.bilibili.com=121.194.11.75
+# 静态 DNS 映射 (IPv6)
+localhost.example.com=::1
