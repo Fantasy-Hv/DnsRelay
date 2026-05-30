@@ -1,6 +1,8 @@
 #include "test_utils.h"
 #include "dns/cache.h"
 #include "dns/protocol.h"
+#include "infra/config.h"
+#include "infra/logger.h"
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -871,6 +873,9 @@ static void test_cache_zero_length_rdata(void) {
 }
 
 int main(void) {
+    config_init();
+    logger_init();
+
     // init
     test_cache_init_returns_zero();
     test_cache_init_idempotent();

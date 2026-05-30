@@ -4,11 +4,14 @@
 // 需要线程安全的实现，使用 <threads.h>
 #include "dns/cache.h"
 
+#include <arpa/inet.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <threads.h>
 
+#include "infra/config.h"
 #include "infra/exception.h"
 #include "infra/logger.h"
 #include "infra/utils.h"
@@ -71,12 +74,6 @@ static char *cache_key_create(const char *qname, uint16_t qtype, uint16_t qclass
     return key;
 }
 
-// ======================== RR 深拷贝 ========================
-
-/**
- * 深拷贝一条 RR。
- * 调用方持有调用方的 RR 指针，缓存层保存自己的独立副本。
- */
 
 
 // ======================== CacheValue 辅助 ========================
@@ -99,7 +96,7 @@ static void free_cache_value(CacheValue *value) {
 }
 
 /**
- * 深拷贝 CacheValue：将 src 中的所有 RR 独立拷贝到 dst。
+ * 深拷贝 CacheValue：将 src 中的所有 RR 独立拷贝到 dst.rrs。
  * dst 必须已分配（可以是栈上对象），其原有内容会被覆盖。
  * @return 0-失败，1-成功
  */
@@ -186,8 +183,8 @@ static int is_entry_expired(const CacheEntry *entry) {
     for (int i = 0; i < vector_size(entry->value.rrs); i++) {
         const ResourceRecord *rr = vector_get(entry->value.rrs, i);
 
-        if (rr == NULL||rr->ttl == UINT32_MAX)
-            continue; // 永不过期
+        if (rr == NULL||rr->ttl == UINT32_MAX) // 永不过期
+            continue;
 
         if ((now - entry->created_at) / 1000 >= (ms) rr->ttl) {
             return 1;
@@ -278,6 +275,131 @@ static int dns_cache_prune_locked(void) {
     return 0;
 }
 
+
+
+/**
+ * 解析 ip 映射表文件，格式：域名=ip，每行一条，支持 # 单行注释。
+ * 按 (qname, qtype) 聚合多条相同question的记录，生成 CacheValue 写入缓存。
+ */
+static int load_ip_table(const char *path) {
+    // 打开文件
+    FILE *fd = fopen(path, "r");
+    if (!fd) {
+        do_log(DEBUG, "ip table file not found: %s", path);
+        return -1;
+    }
+
+    // 临时数据容器
+    HashMap *rr_groups = hash_map_create(hash_func_str, compare_cstr);
+    Vector *group_keys = vector_create(16);
+
+    // 遍历每行，解析RR并加入RR组
+    char line[512];
+    int line_no = 0;
+    while (fgets(line, sizeof(line), fd)) {
+
+        // trim
+        line_no++;
+        char *p = line;
+        while (isspace((unsigned char)*p)) p++;
+        if (*p == '\0' || *p == '\n' || *p == '#') continue;
+
+        char *eq = strchr(p, '=');
+        if (!eq) {
+            do_log(WARN, "ip table line %d: missing '=', skipping", line_no);
+            continue;
+        }
+
+        *eq = '\0';
+        // 获取域名串[domain,end]
+        char *domain = p;
+        char *end = eq - 1;
+        // trim
+        while (end >= domain && isspace((unsigned char)*end)) { *end = '\0'; end--; } // 为什么要*end=‘0’？在循环结束后end[1]='\0'不就行了
+
+        // 获取ip串
+        char *ip_str = eq + 1;
+        // trim
+        while (isspace((unsigned char)*ip_str)) ip_str++;
+        end = ip_str + strlen(ip_str) - 1;
+        while (end >= ip_str && (isspace((unsigned char)*end) || *end == '\n' || *end == '\r')) { *end = '\0'; end--; }
+
+        // 空串检查
+        if (*domain == '\0' || *ip_str == '\0') {
+            do_log(WARN, "ip table line %d: empty domain or ip, skipping", line_no);
+            continue;
+        }
+
+        // 解析ip串，获取类型
+        Qtype type;
+        struct in_addr v4;
+        struct in6_addr v6;
+        if (inet_pton(AF_INET, ip_str, &v4) == 1) {
+            type = QTYPE_A;
+        } else if (inet_pton(AF_INET6, ip_str, &v6) == 1) {
+            type = QTYPE_AAAA;
+        } else {
+            do_log(WARN, "ip table line %d: invalid ip '%s', skipping", line_no, ip_str);
+            continue;
+        }
+
+        // 构造RR
+        ResourceRecord *rr = rr_make_from_config_pair(domain, UINT32_MAX, type, ip_str);
+        if (!rr) {
+            do_log(WARN, "ip table line %d: rr_make failed for %s=%s, skipping", line_no, domain, ip_str);
+            continue;
+        }
+
+        // 同域名的RR记录合并为一组
+        char group_key[512];
+        snprintf(group_key, sizeof(group_key), "%u|%s", (unsigned)type, rr->name);
+
+        // 获取RR组
+        Vector *rr_group = NULL;
+        if (hash_map_get(rr_groups, group_key, (T*)&rr_group) != 0 || !rr_group) { // 组中第一条记录
+            rr_group = vector_create(5);
+            char *dup_key = strdup(group_key);
+            hash_map_put(rr_groups, dup_key, rr_group);
+            vector_add(group_keys, dup_key);
+        }
+
+        vector_add(rr_group, rr);
+    }
+    fclose(fd);
+
+    // 将所有RR组存进缓存
+    for (int i = 0; i < vector_size(group_keys); i++) {
+        char *group_key = vector_get(group_keys, i);
+        Vector *rr_group = NULL;
+        if (hash_map_get(rr_groups, group_key, (T*)&rr_group) != 0 || !rr_group) continue;
+
+        //从key中 解析 qname 和 type
+        char *separator = strchr(group_key, '|');
+        if (!separator) continue;
+        Qtype group_type = (Qtype)atoi(group_key); // atoi: 扫描数字字符串，遇到非数字即停止
+        char *qname = separator + 1;
+
+        // 组装CacheValue 并放入缓存
+        CacheValue cache_value = {0};
+        cache_value.rrs = rr_group;
+        cache_value.answer_RRs = (uint16_t)vector_size(rr_group);
+        dns_cache_put(qname, group_type, QCLASS_IN, cache_value);
+
+        // put内部会对rr做深拷贝，这里需要释放临时的RR列表
+        for (int j = 0; j < vector_size(rr_group); j++)
+            rr_free(vector_get(rr_group, j));
+        vector_free(rr_group);
+    }
+
+    // 释放临时容器
+    for (int i = 0; i < vector_size(group_keys); i++)
+        free(vector_get(group_keys, i));
+    vector_free(group_keys);
+    hash_map_free(rr_groups);
+
+    return 0;
+}
+
 // ======================== 公开接口 ========================
 
 /**
@@ -300,7 +422,7 @@ int dns_cache_init() {
         return 1;
     }
 
-    // 创建 LRU 哨兵节点
+    // 初始化 LRU 哨兵节点
     cache->head = malloc(sizeof(CacheEntry));
     cache->tail = malloc(sizeof(CacheEntry));
     if (cache->head == NULL || cache->tail == NULL) {
@@ -315,6 +437,7 @@ int dns_cache_init() {
     cache->head->colder = cache->tail;
     cache->tail->hotter = cache->head;
 
+    // 创建锁
     if (mtx_init(&cache->lock, mtx_plain) != thrd_success) {
         free(cache->head);
         free(cache->tail);
@@ -326,30 +449,43 @@ int dns_cache_init() {
     cache->size = 0;
     cache->capacity = DNS_CACHE_DEFAULT_CAPACITY;
     g_cache = cache;
+
+    char *ip_path = VALUE_DEFAULT_IP_TABLE_PATH;
+    config_get(SECTION_DNS, KEY_IP_TABLE_PATH, (T*)&ip_path);
+
+    ex_try();
+    if (load_ip_table(ip_path) == 0)
+        do_log(INFO, "ip table loaded: %s", ip_path);
+    if (ex_catch())
+        do_log(ERROR, "cache_init: %s", ex_end());
+
     return 0;
 }
 
 /**
- * 缓存 RR 记录。
- *
- * 流程：
- * 1. 构造查询 key
- * 2. 加锁
- * 3. prune 清理过期条目
- * 4. 如果 key 已存在 → 释放旧 value.rrs，深拷贝新 RR，更新 created_at，LRU 移至头部
- * 5. 如果 key 不存在 → 容量满则淘汰最冷条目 → 创建 CacheEntry → hash_map_put + LRU 头插
- * 6. 解锁
- *
- * @param qname      查询域名
+ * 缓存RR记录
+* * @param qname      查询域名
  * @param type       查询类型
  * @param qclass     查询类
  * @param cache_value 要缓存的 RR 列表（只读，内部深拷贝）
  * @return 0-缓存成功，1-缓存失败
+
+ *
  */
 int dns_cache_put(const char *qname, Qtype type, Class qclass, CacheValue cache_value) {
     if (g_cache == NULL || qname == NULL || cache_value.rrs == NULL) {
         return 1;
     }
+
+    /*
+     * 流程：
+     * 1. 构造查询 key
+     * 2. 加锁
+     * 3. prune 清理过期条目
+     * 4. 如果 key 已存在 → 释放旧 value.rrs，深拷贝新 RR，更新 created_at，LRU 移至头部
+     * 5. 如果 key 不存在 → 容量满则淘汰最冷条目 → 创建 CacheEntry → hash_map_put + LRU 头插
+     * 6. 解锁
+     */
 
     char *key = cache_key_create(qname, type, qclass);
 
@@ -359,22 +495,21 @@ int dns_cache_put(const char *qname, Qtype type, Class qclass, CacheValue cache_
         return 1;
     }
 
-    // 每次写入前先清理过期条目，避免 size 被无效数据占满
-    dns_cache_prune_locked();
-
     // make entry
     CacheEntry *entry = NULL;
     if (hash_map_get(g_cache->table, key, (T *) &entry) == 0 && entry != NULL) {
         // key 已存在：原地更新
-        free_cache_value(&entry->value);
-        if (!cache_value_clone(&entry->value, &cache_value)) {
-            // 深拷贝失败，移除这个已损坏的条目
+        CacheValue new_value ;
+        if (!cache_value_clone(&new_value, &cache_value)) {
+            // 深拷贝失败
             ex_throw("cache_put: cache_value_clone failed");
-            cache_remove_entry(entry);
             mtx_unlock(&g_cache->lock);
             free(key);
             return 1;
         }
+        // 释放旧的rrs，挂载新的rrs
+        free_cache_value(&entry->value);
+        entry->value = new_value;
         entry->created_at = sys_time_ms();
         lru_touch(g_cache, entry);
     } else {
@@ -451,7 +586,7 @@ int dns_cache_get(const char *qname, Qtype type, Class qclass, CacheValue *resul
     // 过期检查
     if (is_entry_expired(entry)) {
         cache_remove_entry(entry);
-        do_log(TRACE,"cache expired : [%s,%u]",qname,type);
+        do_log(TRACE,"cache hit but expired : [%s,%u]",qname,type);
         mtx_unlock(&g_cache->lock);
         free(key);
         return 1;

@@ -161,6 +161,10 @@ ResourceRecord *rr_clone(const ResourceRecord *record) ;
  */
 ResourceRecord* rr_make_from_config_pair(const char * name,uint32_t ttl,Qtype type,const char* data);
 void rr_free(ResourceRecord *rr);
+
+char *encode_name(const char *domain);
+
+char *decode_name(const char *encoded);
 /**
  *
  * @param dns_pack 释放该dns包占用的内存

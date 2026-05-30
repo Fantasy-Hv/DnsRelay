@@ -44,8 +44,8 @@ static HashMap* config_cleaners;
 int func_compare(T a,T b) {
     return a==b;
 }
-// key最长32字节
-#define KEY_SIZE 32
+// key最长64字节
+#define KEY_SIZE 64
 #define VALUE_STR_SIZE 128
 ConfigValue* entry_create() {
     ConfigValue* entry = malloc(sizeof(ConfigValue));

@@ -2,21 +2,6 @@
 // Created by yian on 2026/5/9.
 //
 // 核心模块！！！其他模块可以没有，但是这个必须很完善。
-
-
-#include <errno.h>
-#include <stdio.h>
-
-#include "dns/protocol.h"
-#include "dns/cache.h"
-#include <stdlib.h>
-#include <string.h>
-#include <netinet/in.h>
-
-#include "infra/exception.h"
-#include "infra/logger.h"
-#include "infra/utils.h"
-#define DNS_REV_BUF_SIZE 1024
 /**
  *目前需要满足的两类需求：
  一、dns包的序列化和反序列化
@@ -26,7 +11,7 @@
     每个question解析行为是固定的，name字段自解码，qtype和qclass定长需要转换字节序
   RR的解析：分别按照header中指定的数量来循环解析每条RR
   rr的解析，前面ttl、type、class、data length都是定长，需要转换字节序，
-  name需要解码，然后rdata直接copy就行了。
+  name需要解码，然后rdata直接copy就行了（当然也可以套个中间函数预留扩展入口）。
   总的来说没有复杂的逻辑
  *2.反序列化dns包
     header需要转换字节序，然后copy
@@ -37,23 +22,92 @@
     2.question中内容的解析，
  */
 
+#include <errno.h>
+#include <stdio.h>
+
+#include "dns/protocol.h"
+#include "dns/cache.h"
+#include <stdlib.h>
+#include <string.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+
+#include "infra/exception.h"
+#include "infra/logger.h"
+#include "infra/utils.h"
+#define DNS_REV_BUF_SIZE 1024
+
+
 
 /**
- * 将人类可读的域名字符串转为dns编码（非指针）
- * @decrepted 貌似没必要转换～
- * @return
+ * 将人类可读的域名字符串转为dns wire编码
+ * "www.baidu.com" -> "\x03www\x05baidu\x03com\x00"
+ * @return 调用者需要free，失败返回NULL
  */
-char *encode_name(const char *) {
-    return NULL;
+char *encode_name(const char *domain) {
+    if (!domain || !*domain) return NULL;
+
+    size_t len = strlen(domain);
+    char *encoded = malloc(len + 2);
+    if (!encoded) return NULL;
+
+    const char *read = domain;
+    char *write = encoded;
+    const char *label_start = domain;
+
+    while (1) {
+        if (*read == '.' || *read == '\0') {
+            size_t label_len = (size_t)(read - label_start);
+            if (label_len > 63) {
+                free(encoded);
+                return NULL;
+            }
+            *write++ = (char)label_len;
+            memcpy(write, label_start, label_len);
+            write += label_len;
+            if (*read == '\0') {
+                *write++ = '\0';
+                break;
+            }
+            label_start = read + 1;
+        }
+        read++;
+    }
+    return encoded;
 }
 
 /**
- * 将dns包的域名字段解析为人类可读的字符串
- * @decrepted 貌似没必要转换～
- * @return
+ * 将dns wire编码转为人类可读的域名字符串
+ * "\x03www\x05baidu\x03com\x00" -> "www.baidu.com"
+ * @return 调用者需要free，失败返回NULL
  */
-char *decode_name(const char *) {
-    return NULL;
+char *decode_name(const char *encoded) {
+    if (!encoded) return NULL;
+
+    const char *p = encoded;
+    size_t total = 0;
+    while (*p) {
+        if ((*p & 0xC0) == 0xC0) return NULL;
+        total += (unsigned char)*p + 1;
+        p += (unsigned char)*p + 1;
+    }
+    total += 1;
+
+    char *decoded = malloc(total);
+    if (!decoded) return NULL;
+
+    p = encoded;
+    char *write = decoded;
+    while (*p) {
+        int label_len = (unsigned char)*p;
+        p++;
+        memcpy(write, p, label_len);
+        write += label_len;
+        p += label_len;
+        if (*p) *write++ = '.';
+    }
+    *write = '\0';
+    return decoded;
 }
 
 
@@ -78,9 +132,63 @@ ResourceRecord *rr_create() {
 }
 
 void rr_free(ResourceRecord *rr) {
-    free(rr->rdata);
     free(rr->name);
+    free(rr->rdata);
     free(rr);
+}
+
+ResourceRecord* rr_make_from_config_pair(const char* name, uint32_t ttl, Qtype type, const char* data) {
+    if (!name || !data) return NULL;
+
+    ResourceRecord* rr = rr_create();
+    if (!rr) return NULL;
+
+    rr->name = encode_name(name);
+    if (!rr->name) {
+        rr_free(rr);
+        return NULL;
+    }
+
+    rr->type = type;
+    rr->class = QCLASS_IN;
+    rr->ttl = ttl;
+
+    if (type == QTYPE_A) {
+        rr->rdata = malloc(4);
+        if (!rr->rdata || inet_pton(AF_INET, data, rr->rdata) != 1) {
+            rr_free(rr);
+            return NULL;
+        }
+        rr->rdata_length = 4;
+    } else if (type == QTYPE_AAAA) {
+        rr->rdata = malloc(16);
+        if (!rr->rdata || inet_pton(AF_INET6, data, rr->rdata) != 1) {
+            rr_free(rr);
+            return NULL;
+        }
+        rr->rdata_length = 16;
+    } else if (type == QTYPE_CNAME) {
+        char* encoded = encode_name(data);
+        if (!encoded) {
+            rr_free(rr);
+            return NULL;
+        }
+        int len = (int)strlen(encoded) + 1;
+        rr->rdata = malloc((size_t)len);
+        if (!rr->rdata) {
+            free(encoded);
+            rr_free(rr);
+            return NULL;
+        }
+        memcpy(rr->rdata, encoded, (size_t)len);
+        rr->rdata_length = (uint16_t)len;
+        free(encoded);
+    } else {
+        rr_free(rr);
+        return NULL;
+    }
+
+    return rr;
 }
 
 SectionQuestion *question_create() {
