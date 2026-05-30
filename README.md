@@ -109,7 +109,7 @@ dns/              — 核心层：协议解析、缓存、ID 分配
 infra/            — 基础设施层：容器、配置、日志、Socket、异常追踪
 ```
 
-详见  [docs/comments.md](docs/comments.md)。
+详见  [docs/architect.md](docs/architect.md)。
 
 ## 运行测试
 
