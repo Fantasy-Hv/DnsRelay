@@ -1,16 +1,11 @@
-//
-// Created by yian on 2026/5/9.
-//
 // 需要线程安全的实现，使用 <threads.h>
 #include "dns/cache.h"
-
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <threads.h>
-
 #include "infra/config.h"
 #include "infra/exception.h"
 #include "infra/logger.h"

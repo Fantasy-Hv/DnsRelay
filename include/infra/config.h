@@ -1,6 +1,4 @@
-//
-// Created by yian on 2026/5/8.
-//
+
 /**
  *配置文件格式(只支持ascii字符)：
  #this is comment.

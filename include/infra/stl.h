@@ -1,5 +1,4 @@
 //
-// Created by yian on 2026/5/8.
 //
 
 #ifndef DNSRELAY_STL_H
@@ -7,7 +6,7 @@
 #include <stdint.h>
 #include <string.h>
 
-//删除和增加操作都是增删指针（一个无符号整型），容器在执行crud方法时，只是在对这个整型进行操作。
+//删除和增加操作都是增删一个无符号整型，容器在执行crud方法时，只是在对这个整型进行操作。
 typedef void* T; //值的类型
 typedef void* K; //key的类型
 typedef int (*Comparator)(T a,T b); // 比较函数，返回“a-b”的值，以此判断元素大小等于关系

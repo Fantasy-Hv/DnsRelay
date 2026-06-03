@@ -1,6 +1,3 @@
-//
-// Created by yian on 2026/5/8.
-//
 
 #ifndef DNSRELAY_PLATFORM_H
 #define DNSRELAY_PLATFORM_H

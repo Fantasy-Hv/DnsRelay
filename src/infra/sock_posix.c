@@ -1,6 +1,3 @@
-//
-// Created by yian on 2026/5/8.
-//
 #ifdef __linux__
 #include <errno.h>
 #include <arpa/inet.h>
@@ -13,13 +10,12 @@
 #include <unistd.h>      // close
 #include <stdlib.h>
 #include <string.h>
-
 #include "infra/exception.h"
 
 
 int socket_create(SocketHolder *socket_holder) {
-    int fd = socket(AF_INET6,SOCK_DGRAM,0);
-    if (fd==-1) {
+    int fd = socket(AF_INET6,SOCK_DGRAM, 0);
+    if (fd == -1) {
         ex_throw("syscall socket");
         return -1;
     }
@@ -31,14 +27,14 @@ int socket_create(SocketHolder *socket_holder) {
 
 int socket_bind(SocketHolder socket,u_int16_t port) {
     struct sockaddr_in6 addr;
-    memset(&addr,0,sizeof(struct sockaddr_in6));
+    memset(&addr, 0, sizeof(struct sockaddr_in6));
     addr.sin6_family = AF_INET6;
     addr.sin6_addr = in6addr_any;
     addr.sin6_port = htons(port);
 
-    int ret = bind(socket,(struct  sockaddr*)&addr,sizeof(struct sockaddr_in6));
-    if (ret==-1)
-         ex_throw("syscall bind,errno %d",errno);
+    int ret = bind(socket, (struct sockaddr *) &addr, sizeof(struct sockaddr_in6));
+    if (ret == -1)
+        ex_throw("syscall bind,errno %d",errno);
     return ret;
 }
 
@@ -52,27 +48,27 @@ int socket_bind(SocketHolder socket,u_int16_t port) {
  */
 int socket_send(SocketHolder socket,const void *buf, size_t buf_len,NetEnd dest) {
     // 构造地址
-    struct sockaddr* addr;
-    int add_len ;
-    if (dest.version==IPV4) {
-
-        struct sockaddr_in* in_addr = malloc(sizeof(struct sockaddr_in));
-        memset(in_addr,0,sizeof(struct sockaddr_in));
+    struct sockaddr *addr;
+    int add_len;
+    if (dest.version == IPV4) {
+        struct sockaddr_in *in_addr = malloc(sizeof(struct sockaddr_in));
+        memset(in_addr, 0, sizeof(struct sockaddr_in));
         in_addr->sin_family = AF_INET;
         in_addr->sin_addr.s_addr = dest.addr.ipv4; //
         in_addr->sin_port = dest.port; //NetEnd 里的地址端口都是网络序
 
-        addr = (struct sockaddr*)in_addr;
-        add_len = sizeof(struct  sockaddr_in);
-    } else { //ipv6
+        addr = (struct sockaddr *) in_addr;
+        add_len = sizeof(struct sockaddr_in);
+    } else {
+        //ipv6
 
-        struct sockaddr_in6* in_addr = malloc(sizeof(struct sockaddr_in6));
-        memset(in_addr,0,sizeof(struct sockaddr_in6));
+        struct sockaddr_in6 *in_addr = malloc(sizeof(struct sockaddr_in6));
+        memset(in_addr, 0, sizeof(struct sockaddr_in6));
         in_addr->sin6_port = dest.port;
         in_addr->sin6_family = AF_INET6;
-        memcpy(in_addr->sin6_addr.__in6_u.__u6_addr8,dest.addr.ipv6,16);
+        memcpy(in_addr->sin6_addr.__in6_u.__u6_addr8, dest.addr.ipv6, 16);
 
-        addr = (struct sockaddr*)in_addr;
+        addr = (struct sockaddr *) in_addr;
         add_len = sizeof(struct sockaddr_in6);
     }
     //发包
@@ -102,18 +98,18 @@ int socket_recv_nowait(SocketHolder socket,void *buf, size_t buf_len, NetEnd *so
     socklen_t addrlen = sizeof(src);
 
     //收包
-    rn = recvfrom(socket,buf,buf_len,SOCK_NONBLOCK,(struct sockaddr*)&src,&addrlen);
-    if (rn==-1) {
+    rn = recvfrom(socket, buf, buf_len,SOCK_NONBLOCK, (struct sockaddr *) &src, &addrlen);
+    if (rn == -1) {
         ex_throw("syscall recvfrom,errno %d",errno);
         return rn;
     }
     // 拿地址
     if (IN6_IS_ADDR_V4MAPPED(&src.sin6_addr)) {
-        memcpy(&source->addr.ipv4,&src.sin6_addr.__in6_u.__u6_addr32[3],4);
+        memcpy(&source->addr.ipv4, &src.sin6_addr.__in6_u.__u6_addr32[3], 4);
         source->port = src.sin6_port;
         source->version = IPV4;
-    }else {
-        memcpy(&source->addr.ipv6,src.sin6_addr.__in6_u.__u6_addr8,16);
+    } else {
+        memcpy(&source->addr.ipv6, src.sin6_addr.__in6_u.__u6_addr8, 16);
         source->port = src.sin6_port;
         source->version = IPV6;
     }
@@ -137,49 +133,49 @@ int socket_sleep_on(SocketHolder socket_holder,int socket_cnt,ms timeout) {
     // 准备参数
     fd_set set;
     FD_ZERO(&set);
-    FD_SET(socket_holder,&set); // 设置要监听的socket集合
-    struct  timeval *timeptr;
+    FD_SET(socket_holder, &set); // 设置要监听的socket集合
+    struct timeval *timeptr;
     struct timeval time;
-    if (timeout<0)
+    if (timeout < 0)
         timeptr = NULL;
     else {
-        time = (struct timeval ){timeout/1000,(timeout%1000)*1000}; // 设置超时时间
+        time = (struct timeval){timeout / 1000, (timeout % 1000) * 1000}; // 设置超时时间
         timeptr = &time;
     }
     // 监听事件
-    int ret =  select(socket_holder+1,&set,NULL,NULL,timeptr);
+    int ret = select(socket_holder + 1, &set,NULL,NULL, timeptr);
     // 错误记录
-    if (ret<0)
-       ex_throw("syscall select,errno %d",errno);
+    if (ret < 0)
+        ex_throw("syscall select,errno %d",errno);
     return ret;
 }
 
  int ipstr2binary(const char * ip_str,NetEnd** res) {
-    NetEnd *result = malloc(sizeof(NetEnd));
-    memset(result, 0, sizeof(NetEnd));
+     NetEnd *result = malloc(sizeof(NetEnd));
+     memset(result, 0, sizeof(NetEnd));
 
-    // inet_pton ：ip字符串转二进制，1解析成功，0格式错误，-1协议族不支持
-    // IPv4
-    if (inet_pton(AF_INET, ip_str, &result->addr.ipv4) == 1) {
-        result->version = IPV4;
-        result->port = htons(53);
-        *res =  result;
-        return 0;
-    }
+     // inet_pton ：ip字符串转二进制，1解析成功，0格式错误，-1协议族不支持
+     // IPv4
+     if (inet_pton(AF_INET, ip_str, &result->addr.ipv4) == 1) {
+         result->version = IPV4;
+         result->port = htons(53);
+         *res = result;
+         return 0;
+     }
 
-    // 再尝试 IPv6
-    if (inet_pton(AF_INET6, ip_str, &result->addr.ipv6) == 1) {
-        result->version = IPV6;
-        result->port = htons(53);
-        *res =  result;
-        return 0;
-    }
-    ex_throw("ipstr2binary");
-    return -1;
+     // 再尝试 IPv6
+     if (inet_pton(AF_INET6, ip_str, &result->addr.ipv6) == 1) {
+         result->version = IPV6;
+         result->port = htons(53);
+         *res = result;
+         return 0;
+     }
+     ex_throw("ipstr2binary");
+     return -1;
 }
 
  void sock_config_free_netend(T value) {
-    NetEnd* end = value;
-    free(end);
-}
+     NetEnd *end = value;
+     free(end);
+ }
 #endif

@@ -1,9 +1,4 @@
-//
-// Created by yian on 2026/5/8.
-//
 # include  "infra/stl.h"
-
-#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -27,7 +22,7 @@ static int vector_grow(Vector *vector, int min_capacity) {
     if (min_capacity <= vector->capacity) {
         return 1;
     }
-    
+
     int temp_capacity = vector->capacity;
     if (vector->capacity <= 0) {
         temp_capacity = 1;
@@ -37,7 +32,7 @@ static int vector_grow(Vector *vector, int min_capacity) {
         temp_capacity <<= 1;
     }
 
-    T * temp_elements = realloc(vector->elements,sizeof(T) * temp_capacity);
+    T *temp_elements = realloc(vector->elements, sizeof(T) * temp_capacity);
     if (temp_elements == NULL) {
         return 0;
     }
@@ -53,7 +48,7 @@ Vector* vector_create(int init_capacity) {
         init_capacity = 1;
     }
 
-    Vector* vector = malloc(sizeof(Vector));
+    Vector *vector = malloc(sizeof(Vector));
     if (vector == NULL) {
         return NULL;
     }

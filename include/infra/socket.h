@@ -1,6 +1,4 @@
-//
-// Created by yian on 2026/5/8.
-//
+
 #ifndef DNSRELAY_SOCKET_H
 #define DNSRELAY_SOCKET_H
 #include <stdint.h>

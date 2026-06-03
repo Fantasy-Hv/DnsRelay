@@ -1,8 +1,3 @@
-//
-// Created by yian on 2026/5/8.
-//
-
-
 #include <string.h>
 #include <time.h>
 #include <netinet/in.h>
@@ -11,7 +6,7 @@
 // 返回单调毫秒时间戳
 int64_t sys_time_ms(void) {
     struct timespec t;
-    clock_gettime(CLOCK_MONOTONIC,&t);
+    clock_gettime(CLOCK_MONOTONIC, &t);
     return t.tv_sec * 1000 + t.tv_nsec / 1000000;
 }
 
@@ -22,7 +17,7 @@ static int is_little_endian(void) {
 
     if (!endian_checked) {
         uint16_t test = 0x0001;
-        is_little = (((uint8_t*)&test)[0] == 0x01) ? 1 : 0;
+        is_little = (((uint8_t *) &test)[0] == 0x01) ? 1 : 0;
         endian_checked = 1;
     }
     return is_little;
@@ -30,31 +25,31 @@ static int is_little_endian(void) {
 
 // 内部辅助函数：8字节反转
 static uint64_t swap_8(uint64_t value) {
-    return ((value >> 0  & 0xFF) << 56) |
-           ((value >> 8  & 0xFF) << 48) |
+    return ((value >> 0 & 0xFF) << 56) |
+           ((value >> 8 & 0xFF) << 48) |
            ((value >> 16 & 0xFF) << 40) |
            ((value >> 24 & 0xFF) << 32) |
            ((value >> 32 & 0xFF) << 24) |
            ((value >> 40 & 0xFF) << 16) |
-           ((value >> 48 & 0xFF) << 8)  |
+           ((value >> 48 & 0xFF) << 8) |
            ((value >> 56 & 0xFF) << 0);
 }
 
 // 内部辅助函数：16字节反转
 static void swap_16(const uint8_t src[16], uint8_t dst[16]) {
     // if (!src || !dst) return;
-    for (int i = 0;i<16;i++)
-        dst[i]=src[15-i];
+    for (int i = 0; i < 16; i++)
+        dst[i] = src[15 - i];
 }
 
 // ==================== 公开API：主机序 -> 网络序 ====================
 
 void h2n_2(uint16_t* host) {
-        *host = htons(*host);
+    *host = htons(*host);
 }
 
 void h2n_4(uint32_t* host) {
-        *host = htonl(*host);
+    *host = htonl(*host);
 }
 
 void h2n_8(uint64_t* host) {

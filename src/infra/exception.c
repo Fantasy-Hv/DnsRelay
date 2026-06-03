@@ -1,6 +1,3 @@
-//
-// Created by yian on 2026/5/18.
-//
 #include "infra/exception.h"
 #include <stdarg.h>
 #include <stdio.h>
@@ -30,14 +27,14 @@ void ex_throw(const char* format,...) {
     if (!err_flag)ex_try();
     char at[256] = {'\0'};
     // 格式化字符串
-    va_list args = {0} ; // 用这个变量指向参数列表
-    va_start(args,format); //初始化
-    vsprintf(at,format,args);
+    va_list args = {0}; // 用这个变量指向参数列表
+    va_start(args, format); //初始化
+    vsprintf(at, format, args);
     va_end(args); // 释放参数列表
     // 写入错误信息栈
-    int net_r = stack_top-strlen(at);
-    if (net_r<0)return;
-    memcpy(&msg[net_r],at,strlen(at)); //不需要带\0
+    int net_r = stack_top - strlen(at);
+    if (net_r < 0)return;
+    memcpy(&msg[net_r], at, strlen(at)); //不需要带\0
     msg[--net_r] = '\n';
     stack_top = net_r;
 }

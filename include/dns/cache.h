@@ -1,6 +1,3 @@
-//
-// Created by yian on 2026/5/8.
-//
 
 // dns缓存全局单例，上层可直接从本接口读写缓存数据，需要线程安全的实现。(可以用<threads.h>提供的锁)
 #ifndef DNSRELAY_CACHE_H

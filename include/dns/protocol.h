@@ -1,6 +1,4 @@
-//
-// Created by yian on 2026/5/8.
-//
+
 //无状态的dns协议解析层
 #ifndef DNSRELAY_PROTOCOL_H
 #define DNSRELAY_PROTOCOL_H
@@ -101,7 +99,7 @@ typedef enum {
  *  IN    CNAME     name的标准名称，dns域名编码
  *  IN    NS        该区域的权威服务器域名，dns域名编码
  *  IN    PTR       用于反向dns解析查询 ，此时name为ip地址，有特殊编码规则，对于PTR记录的query,同样只需要
- *  IN    SOA       较为复杂。。。作为中转服务器貌似没有必要解析
+ *  IN    SOA
  */
 typedef struct {
     char* name; //该记录对应question中的哪个域名，dns域名编码，是字符串(\0)

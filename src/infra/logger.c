@@ -1,9 +1,4 @@
-//
-// Created by yian on 2026/5/8.
-//日志打印工具类，
-//
 #include "infra/logger.h"
-
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -22,13 +17,12 @@ int log_config_parser(const char *key, const char *value, T *result) {
         while (level < LEVEL_NUM && strcasecmp(LEVEL_STR[level], value) != 0)
             level++;
 
-        level = level < LEVEL_NUM ? level: INFO;
+        level = level < LEVEL_NUM ? level : INFO;
         *result = (T) level;
         return 0;
     }
     for (int i = TRACE; i < LEVEL_NUM; i++) {
         if (strcasecmp(LEVEL_STR[i], key) == 0) {
-
             if (strcasecmp(value, "stdout") == 0)
                 *result = stdout;
             else if (strcasecmp(value, "stderr") == 0)
@@ -41,7 +35,6 @@ int log_config_parser(const char *key, const char *value, T *result) {
                     *result = stdout;
                 } else *result = out;
             }
-
         }
     }
     return 0;
@@ -67,15 +60,15 @@ int logger_init() {
  * @param ...
  */
 void do_log(LogLevel level, const char *format, ...) {
-    if (level<logging_level)return;
-    FILE* channel = output_channels[level];
+    if (level < logging_level)return;
+    FILE *channel = output_channels[level];
     //添加日志时间
-    fprintf( channel,"t:%ld [%s] ",sys_time_ms()/1000,LEVEL_STR[level]);
+    fprintf(channel, "t:%ld [%s] ", sys_time_ms() / 1000, LEVEL_STR[level]);
     //输出日志内容,下面这个是处理变参输出的模板代码
-    va_list args = {0} ; // 用这个变量指向可变参数列表
-    va_start(args,format); //初始化
-    vfprintf(channel,format,args); // 格式化输出
+    va_list args = {0}; // 用这个变量指向可变参数列表
+    va_start(args, format); //初始化
+    vfprintf(channel, format, args); // 格式化输出
     va_end(args); // 释放参数列表
-    fprintf(channel,"\n");
+    fprintf(channel, "\n");
     fflush(channel);
 }

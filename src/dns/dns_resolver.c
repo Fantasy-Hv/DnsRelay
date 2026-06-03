@@ -1,37 +1,11 @@
-//
-// Created by yian on 2026/5/9.
-//
-// 核心模块！！！其他模块可以没有，但是这个必须很完善。
-/**
- *目前需要满足的两类需求：
- 一、dns包的序列化和反序列化
-  1.序列化dns包
- * header可以直接强转然后转换字节序
- * question节需要根据header的qdcont循环解析
-    每个question解析行为是固定的，name字段自解码，qtype和qclass定长需要转换字节序
-  RR的解析：分别按照header中指定的数量来循环解析每条RR
-  rr的解析，前面ttl、type、class、data length都是定长，需要转换字节序，
-  name需要解码，然后rdata直接copy就行了（当然也可以套个中间函数预留扩展入口）。
-  总的来说没有复杂的逻辑
- *2.反序列化dns包
-    header需要转换字节序，然后copy
-    question需要循环列表，编码name,qtype、qclass转换字节序
-    rr一样，定长字段转换字节序，name编码，rdata直接copy
- 二、dns包内容解析，本质上是要回答：如何从一个包构造另一个包，需要仔细研究协议规定的行为
-    1.header中flags的解析，需要根据值采取相应的行为
-    2.question中内容的解析，
- */
-
 #include <errno.h>
 #include <stdio.h>
-
 #include "dns/protocol.h"
 #include "dns/cache.h"
 #include <stdlib.h>
 #include <string.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
-
 #include "infra/exception.h"
 #include "infra/logger.h"
 #include "infra/utils.h"
@@ -546,11 +520,6 @@ int rr_deserialize(const char *start_p, const char *cur_p, ResourceRecord *const
     cursor += rlen;
 
     return cursor - cur_p;
-    /* bug
-    *27 bytes
-bd 90 81 80 00 01 00 00 00 01 00 00 05 70 69 78          .............pix
-69 76 03 63 6f 6d 00 00 1c 00 01
-     */
 }
 
 int rrs_deserialize(const char *start_p, const char *cur_p, int cnt, Vector *const rrs) {

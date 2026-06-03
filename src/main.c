@@ -1,7 +1,5 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-
 #include "../include/infra/config.h"
 #include "../include/server/server.h"
 #include "dns/cache.h"
@@ -18,11 +16,10 @@ void print_help() {
 }
 // 获取参数中的配置文件路径
 int param_get_config_file(int argc,char* argv[]) {
-
-    for (int i=1;i<argc;i++) {
-         if (!strcmp(argv[i],"-c")) {
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-c")) {
             // 那么下一个字符串是配置文件位置
-            if (++i<argc) {
+            if (++i < argc) {
                 config_file = argv[i];
                 return 0;
             }
@@ -33,22 +30,23 @@ int param_get_config_file(int argc,char* argv[]) {
 }
 int param_inject_config(int argc,char* argv[]) {
     char ips[1024] = {0};
-    int i=1;
-    while (i<argc) {
-        if (!strcmp(argv[i],"-d")) {
-            config_set(LOG_SECTION,KEY_LOG_LEVEL,(T)DEBUG);
+    int i = 1;
+    while (i < argc) {
+        if (!strcmp(argv[i], "-d")) {
+            config_set(LOG_SECTION,KEY_LOG_LEVEL, (T) DEBUG);
             i++;
-        }else if (!strcmp(argv[i],"-dd")) {
-            config_set(LOG_SECTION,KEY_LOG_LEVEL,(T)TRACE);
+        } else if (!strcmp(argv[i], "-dd")) {
+            config_set(LOG_SECTION,KEY_LOG_LEVEL, (T) TRACE);
             i++;
-        } else { //什么标记都不带
+        } else {
+            //什么标记都不带
             // dns域名服务器的ip
-            strcat(ips,",");
-            strcat(ips,argv[i++]);
+            strcat(ips, ",");
+            strcat(ips, argv[i++]);
         }
     }
-    if (*ips!=0)
-        config_inject(SERV_SECTION,KEY_UPSTREAMS,ips); // 配置会自己拷贝一份字符串，所以ips用栈存储
+    if (*ips != 0)
+        config_inject(SERV_SECTION,KEY_UPSTREAMS, ips); // 配置会自己拷贝一份字符串，所以ips用栈存储
     return 0;
 }
 
@@ -62,12 +60,12 @@ int main(int argc,char* argv[]) {
         return 1;
     }
     // 加载配置文件
-    param_get_config_file(argc,argv);
+    param_get_config_file(argc, argv);
     if (config_load_file(config_file))
         printf("[WARN] config file load err,use default config\n");
 
     //解析命令行参数，注入命令行参数到配置层
-     param_inject_config(argc,argv);
+    param_inject_config(argc, argv);
 
     if (logger_init())
         printf("[ERROR] logger_init failed\n");
