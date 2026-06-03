@@ -1,6 +1,9 @@
 # include  "infra/stl.h"
+
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <infra/exception.h>
 
 /**
  * Vector 实现建议：
@@ -606,16 +609,19 @@ static int hash_map_resize(HashMap *map, int new_bucket_count) {
 
 HashMap * hash_map_create(HashFunction hash_function,Comparator comparator) {
     if (hash_function == NULL || comparator == NULL) {
+        ex_throw("hashmap_creat : param null");
         return NULL;
     }
 
     HashMap *map = malloc(sizeof(HashMap));
     if (map == NULL) {
+        ex_throw("map alloc failed : %s",strerror(errno));
         return NULL;
     }
 
     map->buckets = vector_create(HASH_MAP_INIT_BUCKETS);
     if (map->buckets == NULL) {
+        ex_throw("map_buckets alloc failed");
         free(map);
         return NULL;
     }

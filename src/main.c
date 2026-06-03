@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <string.h>
+#include <infra/exception.h>
+
 #include "../include/infra/config.h"
 #include "../include/server/server.h"
 #include "dns/cache.h"
@@ -67,21 +69,23 @@ int main(int argc,char* argv[]) {
     //解析命令行参数，注入命令行参数到配置层
     param_inject_config(argc, argv);
 
-    if (logger_init())
+    if (logger_init()) {
         printf("[ERROR] logger_init failed\n");
+        return 1;
+    }
 
     if (id_pool_init()) {
-        printf("[FATAL;]  id_pool_init failed\n");
+        printf("[FATAL]  id_pool_init failed\n");
         return 1;
     }
-
+    ex_try();
     if (dns_cache_init()) {
-        printf("[INFO]  dns_cache_init failed\n");
+        do_log(ERROR,"cache init failed: %s",ex_end());
         return 1;
     }
-
+    ex_try();
     if (session_factory_init()) {
-        printf("[FATAL]  session_factory_init failed\n");
+        do_log( ERROR, "session_factory_init failed:%s",ex_end());
         return 1;
     }
 

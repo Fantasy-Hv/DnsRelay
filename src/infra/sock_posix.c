@@ -16,7 +16,7 @@
 int socket_create(SocketHolder *socket_holder) {
     int fd = socket(AF_INET6,SOCK_DGRAM, 0);
     if (fd == -1) {
-        ex_throw("syscall socket");
+        ex_throw("syscall socket:%s",strerror(errno));
         return -1;
     }
     int opt = 0;
@@ -34,7 +34,7 @@ int socket_bind(SocketHolder socket,u_int16_t port) {
 
     int ret = bind(socket, (struct sockaddr *) &addr, sizeof(struct sockaddr_in6));
     if (ret == -1)
-        ex_throw("syscall bind,errno %d",errno);
+        ex_throw("syscall bind:%s",strerror(errno));
     return ret;
 }
 
@@ -75,9 +75,7 @@ int socket_send(SocketHolder socket,const void *buf, size_t buf_len,NetEnd dest)
     int ret;
     ret = sendto(socket, buf, buf_len,SOCK_NONBLOCK, addr, add_len);
     if (ret == -1) {
-        if (errno == 101)
-            ex_throw("syscall sendto : network unreachable");
-        else ex_throw("syscall sendto err:%d",errno);
+         ex_throw("syscall sendto :%s",strerror(errno));
     }
 
     free(addr);
@@ -100,7 +98,7 @@ int socket_recv_nowait(SocketHolder socket,void *buf, size_t buf_len, NetEnd *so
     //收包
     rn = recvfrom(socket, buf, buf_len,SOCK_NONBLOCK, (struct sockaddr *) &src, &addrlen);
     if (rn == -1) {
-        ex_throw("syscall recvfrom,errno %d",errno);
+        ex_throw("syscall recvfrom: %s",strerror(errno));
         return rn;
     }
     // 拿地址
@@ -146,7 +144,7 @@ int socket_sleep_on(SocketHolder socket_holder,int socket_cnt,ms timeout) {
     int ret = select(socket_holder + 1, &set,NULL,NULL, timeptr);
     // 错误记录
     if (ret < 0)
-        ex_throw("syscall select,errno %d",errno);
+        ex_throw("syscall select:%s",strerror(errno));
     return ret;
 }
 
@@ -170,7 +168,7 @@ int socket_sleep_on(SocketHolder socket_holder,int socket_cnt,ms timeout) {
          *res = result;
          return 0;
      }
-     ex_throw("ipstr2binary");
+     ex_throw("ipstr2binary : %s",errno);
      return -1;
 }
 

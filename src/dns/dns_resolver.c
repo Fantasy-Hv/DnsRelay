@@ -33,6 +33,7 @@ char *encode_name(const char *domain) {
         if (*read == '.' || *read == '\0') {
             size_t label_len = (size_t)(read - label_start);
             if (label_len > 63) {
+                ex_throw("encode_name: label too long");
                 free(encoded);
                 return NULL;
             }
@@ -806,11 +807,13 @@ PacketDirection pack_try_response_local(const DnsPacket *query, DnsPacket **resp
     switch (OPCODE_GET(query->header.flags)) {
         case QUERY:
             //检查问题个数
-            if (query->header.qcount < 0 || query->header.qcount > 1) {
+            if (query->header.qcount > 1) {
+                do_log(DEBUG,"qdcount >1");
                 make_response_fail(query, response, RCODE_NOTIMP);
                 break;
             }
             if (query->header.qcount == 0) {
+                do_log(DEBUG,"empty query");
                 make_response_empty(query, response);
                 break;
             }

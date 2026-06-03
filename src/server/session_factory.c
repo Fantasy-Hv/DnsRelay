@@ -1,5 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
+#include <infra/exception.h>
+
 #include "infra/logger.h"
 #include "server/session.h"
 #include "infra/stl.h"
@@ -34,8 +36,16 @@ static int session_comparator(void* a, void* b) {
 
 int session_factory_init() {
     sessions_queue = lazy_heap_create(session_comparator);
+    if (!sessions_queue) {
+        ex_throw("session_queue alloc failed");
+        return 1;
+    }
     agent_id_sessions = hash_map_create(hash_func_uint64, compare_uint);
-    return !sessions_queue || !agent_id_sessions;
+    if (!agent_id_sessions) {
+        ex_throw("session_map alloc failed");
+        return 1;
+    }
+    return 0;
 }
 
 
