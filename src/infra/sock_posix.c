@@ -96,8 +96,10 @@ int socket_recv_nowait(SocketHolder socket,void *buf, size_t buf_len, NetEnd *so
     socklen_t addrlen = sizeof(src);
 
     //收包
-    rn = recvfrom(socket, buf, buf_len,SOCK_NONBLOCK, (struct sockaddr *) &src, &addrlen);
+    rn = recvfrom(socket, buf, buf_len,MSG_DONTWAIT, (struct sockaddr *) &src, &addrlen);
     if (rn == -1) {
+        if (errno==EAGAIN||errno==EWOULDBLOCK)
+            return 0;
         ex_throw("syscall recvfrom: %s",strerror(errno));
         return rn;
     }
