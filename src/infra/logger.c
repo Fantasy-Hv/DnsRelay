@@ -28,7 +28,9 @@ int log_config_parser(const char *key, const char *value, T *result) {
             else if (strcasecmp(value, "stderr") == 0)
                 *result = stderr;
             else {
-                FILE *out = fopen(value, "a+");
+                FILE *out = fopen(value, "w");
+                fclose(out);
+                out = fopen(value, "a+");
 
                 if (out == NULL) {
                     printf("ERROR: log file %s open failed %d,check config\n", value,errno);
