@@ -1,6 +1,3 @@
-//
-// Created by yian on 2026/5/8.
-//
 
 #ifndef DNSRELAY_LOG_H
 #define DNSRELAY_LOG_H

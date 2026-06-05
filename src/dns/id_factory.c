@@ -1,6 +1,3 @@
-//
-// Created by yian on 2026/5/10.
-//
 #include "dns/id.h"
 #include <string.h>
 

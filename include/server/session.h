@@ -1,6 +1,4 @@
-//
-// Created by yian on 2026/5/9.
-//
+
 #ifndef DNSRELAY_SESSION_H
 #define DNSRELAY_SESSION_H
 #include "dns/protocol.h"
@@ -20,10 +18,12 @@ typedef struct {
     NetEnd client_ip;
     RelayInfo relay_info;
 }Session;
+
 /**
  * 初始化会话存储，不要重复调用
  */
 int session_factory_init();
+
 /**
  * 根据返回的dns响应包获取对应会话
  * @param relay_response

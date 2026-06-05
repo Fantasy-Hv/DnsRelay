@@ -1,16 +1,12 @@
-//
-// Created by yian on 2026/5/9.
-//
 // 需要线程安全的实现，使用 <threads.h>
 #include "dns/cache.h"
-
 #include <arpa/inet.h>
 #include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <threads.h>
-
 #include "infra/config.h"
 #include "infra/exception.h"
 #include "infra/logger.h"
@@ -286,12 +282,16 @@ static int load_ip_table(const char *path) {
     FILE *fd = fopen(path, "r");
     if (!fd) {
         do_log(DEBUG, "ip table file not found: %s", path);
-        return -1;
+        return 1;
     }
 
     // 临时数据容器
     HashMap *rr_groups = hash_map_create(hash_func_str, compare_cstr);
     Vector *group_keys = vector_create(16);
+    if (rr_groups==NULL||group_keys==NULL) {
+        ex_throw("load_ip_table:group container create failed");
+        return 1;
+    }
 
     // 遍历每行，解析RR并加入RR组
     char line[512];
@@ -408,16 +408,19 @@ static int load_ip_table(const char *path) {
  */
 int dns_cache_init() {
     if (g_cache != NULL) {
+        do_log(DEBUG,"repeated call of cache init");
         return 0;
     }
 
     DnsCache *cache = malloc(sizeof(DnsCache));
     if (cache == NULL) {
+        ex_throw("cache alloc failed:%s",strerror(errno));
         return 1;
     }
 
     cache->table = hash_map_create(hash_func_str, compare_cstr);
     if (cache->table == NULL) {
+        ex_throw("cache table alloc failed");
         free(cache);
         return 1;
     }
@@ -426,6 +429,7 @@ int dns_cache_init() {
     cache->head = malloc(sizeof(CacheEntry));
     cache->tail = malloc(sizeof(CacheEntry));
     if (cache->head == NULL || cache->tail == NULL) {
+        ex_throw("lru pivot alloc failed :%s",strerror(errno));
         free(cache->head);
         free(cache->tail);
         hash_map_free(cache->table);
@@ -439,6 +443,7 @@ int dns_cache_init() {
 
     // 创建锁
     if (mtx_init(&cache->lock, mtx_plain) != thrd_success) {
+        ex_throw("mtx init failed : %s",strerror(errno));
         free(cache->head);
         free(cache->tail);
         hash_map_free(cache->table);
@@ -453,12 +458,8 @@ int dns_cache_init() {
     char *ip_path = VALUE_DEFAULT_IP_TABLE_PATH;
     config_get(SECTION_DNS, KEY_IP_TABLE_PATH, (T*)&ip_path);
 
-    ex_try();
     if (load_ip_table(ip_path) == 0)
         do_log(INFO, "ip table loaded: %s", ip_path);
-    if (ex_catch())
-        do_log(ERROR, "cache_init: %s", ex_end());
-
     return 0;
 }
 
@@ -615,10 +616,12 @@ int dns_cache_get(const char *qname, Qtype type, Class qclass, CacheValue *resul
  */
 int dns_cache_prune() {
     if (g_cache == NULL) {
+        ex_throw("cache_prune:cache null");
         return -1;
     }
 
     if (mtx_lock(&g_cache->lock) != thrd_success) {
+        ex_throw("mtx lock failed : %s",strerror(errno));
         return -1;
     }
 

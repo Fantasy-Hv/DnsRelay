@@ -1,11 +1,9 @@
-//
-// Created by yian on 2026/5/8.
-//
 # include  "infra/stl.h"
 
-#include <stddef.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <infra/exception.h>
 
 /**
  * Vector 实现建议：
@@ -27,7 +25,7 @@ static int vector_grow(Vector *vector, int min_capacity) {
     if (min_capacity <= vector->capacity) {
         return 1;
     }
-    
+
     int temp_capacity = vector->capacity;
     if (vector->capacity <= 0) {
         temp_capacity = 1;
@@ -37,7 +35,7 @@ static int vector_grow(Vector *vector, int min_capacity) {
         temp_capacity <<= 1;
     }
 
-    T * temp_elements = realloc(vector->elements,sizeof(T) * temp_capacity);
+    T *temp_elements = realloc(vector->elements, sizeof(T) * temp_capacity);
     if (temp_elements == NULL) {
         return 0;
     }
@@ -53,7 +51,7 @@ Vector* vector_create(int init_capacity) {
         init_capacity = 1;
     }
 
-    Vector* vector = malloc(sizeof(Vector));
+    Vector *vector = malloc(sizeof(Vector));
     if (vector == NULL) {
         return NULL;
     }
@@ -611,16 +609,19 @@ static int hash_map_resize(HashMap *map, int new_bucket_count) {
 
 HashMap * hash_map_create(HashFunction hash_function,Comparator comparator) {
     if (hash_function == NULL || comparator == NULL) {
+        ex_throw("hashmap_creat : param null");
         return NULL;
     }
 
     HashMap *map = malloc(sizeof(HashMap));
     if (map == NULL) {
+        ex_throw("map alloc failed : %s",strerror(errno));
         return NULL;
     }
 
     map->buckets = vector_create(HASH_MAP_INIT_BUCKETS);
     if (map->buckets == NULL) {
+        ex_throw("map_buckets alloc failed");
         free(map);
         return NULL;
     }
