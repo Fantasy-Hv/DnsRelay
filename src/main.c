@@ -32,22 +32,24 @@ int param_get_config_file(int argc,char* argv[]) {
 }
 int param_inject_config(int argc,char* argv[]) {
     char ips[1024] = {0};
-    int i = 1;
-    while (i < argc) {
+
+    for (int i = 1;i < argc;i++) {
         if (!strcmp(argv[i], "-d")) {
             config_set(LOG_SECTION,KEY_LOG_LEVEL, (T) DEBUG);
-            i++;
         } else if (!strcmp(argv[i], "-dd")) {
             config_set(LOG_SECTION,KEY_LOG_LEVEL, (T) TRACE);
+        }
+        else if (!strcmp(argv[i], "-c")) {
             i++;
-        } else {
+        }
+        else {
             //什么标记都不带
             // dns域名服务器的ip
             strcat(ips, ",");
-            strcat(ips, argv[i++]);
+            strcat(ips, argv[i]);
         }
     }
-    if (*ips != 0)
+    if (*ips != '\0')
         config_inject(SERV_SECTION,KEY_UPSTREAMS, ips); // 配置会自己拷贝一份字符串，所以ips用栈存储
     return 0;
 }

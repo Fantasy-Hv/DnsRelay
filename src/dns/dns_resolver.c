@@ -635,8 +635,8 @@ int pack_serialize(const DnsPacket *dns_pack, char *const packet_buf, int buf_si
  * @return 0-解析成功，-1解析失败
  */
 int pack_deserialize(const char *raw_pack, int len, DnsPacket **packet) {
-    if (len > 512) {
-        ex_throw("pack_deseri: size exceeded");
+    if (len > 512||len<12) {
+        ex_throw("pack_deseri: raw size incorrect : %d",len);
         return -1;
     }
     do_log(TRACE, "raw pack size %d", len);
