@@ -41,9 +41,12 @@ static char* recv_buf;
 int pack_recv(DnsPacket** dns_pack, NetEnd *src) {
     const int len = socket_recv_nowait(socket_holder, recv_buf, DNS_RECV_BUF_SIZE, src);
 
+    // 空包丢弃
     if (len == 0)
         return 1;
     if (len == -1) {
+        //无数据
+
         // 在返回途中构建错误发生时的调用链条
         ex_throw("pack_recv");
         return -1;
@@ -64,7 +67,7 @@ char* send_buf;
  */
 int packet_send(const DnsPacket* dns_pack,const NetEnd* dest) {
     if (!dns_pack || dest == NULL) {
-        ex_throw("pack send: pack null / dest null");
+        ex_throw("pack send: pack null or dest null");
         return -1;
     }
 
@@ -118,18 +121,18 @@ static int init_socket() {
  * @return
  */
 static void do_handle_timeout(Session* session) {
+    uint16_t relay_id = session->relay_info.relay_packet->header.id;
     if (session->relay_info.retry_times >= max_retry_time) {
-        id_free(session->relay_info.relay_packet->header.id);
+        id_free(relay_id);
+        do_log(WARN,"session (%d-%d) close after retrying %d times",session->client_id,relay_id,session->relay_info.retry_times);
         session_close(session);
         return;
     }
 
     // 再次发送
     ex_try();
-    if (packet_send(session->relay_info.relay_packet, pick_upstream()) == -1) {
+    if (packet_send(session->relay_info.relay_packet, pick_upstream()) == -1)
         do_log(ERROR, "timeout resend failed %s", ex_end());
-        session->relay_info.retry_times--;
-    }
 
     session->relay_info.retry_times++;
     session_wait(session);
@@ -146,7 +149,7 @@ static void batch_timeout() {
         if (time_remain > 0)
             break;
 
-        do_log(INFO, "handling timeout sess (%d-%d).", session->client_id, session->relay_info.relay_packet->header.id);
+        do_log(WARN, "session timeout (%d-%d).", session->client_id, session->relay_info.relay_packet->header.id);
 
         do_handle_timeout(session);
     }
@@ -210,7 +213,7 @@ static void handle_dns_packet(const DnsPacket *packet_in, NetEnd source_end) {
             session_close(session);
             id_free(packet_in->header.id);
             pack_free(packet_out);
-        } else do_log(WARN, "server : no session match rsp, drop pack");
+        } else do_log(WARN, "server : no session match rsp id %d, drop pack",packet_in->header.id);
     }
 }
 
@@ -224,6 +227,7 @@ static int server_loop() {
         else get_session_timeout_remain(earliest_session, request_timeout, &next_timeout);
 
         ex_try(); // 开启错误上下文
+        do_log(TRACE,"set sleep timeout %ld",next_timeout);
         socket_sleep_on(socket_holder, 1, next_timeout);
         if (!ex_catch()) {
             // 收取dns数据包，select没有错误
@@ -234,7 +238,7 @@ static int server_loop() {
             while (1) {
                 int ret = pack_recv(&packet, &source_end); //需要返回值控制
                 if (ret == 1) {
-                    do_log(WARN, "server loop: no data in sock");
+                    do_log(TRACE, "server loop: no data in sock");
                     break; // 没有数据了
                 }
                 if (ret == -1) {
@@ -246,6 +250,7 @@ static int server_loop() {
                 handle_dns_packet(packet, source_end);
                 pack_free(packet);
             }
+
             // 超时包处理，这些超时包处理出错也不影响事件循环，不关心结果。
             batch_timeout();
         }
