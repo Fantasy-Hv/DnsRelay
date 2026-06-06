@@ -35,7 +35,7 @@ cd scripts && bash build.sh
 
 ```bash
 cd bin
-./DnsRelay -d 10.3.9.6
+sudo ./DnsRelay -d 10.3.9.6
 ```
 
 ### 命令行参数
