@@ -102,12 +102,7 @@ static NetEnd* pick_upstream() {
  * @return
  */
 static int init_socket() {
-    if (socket_create(&socket_holder)) {
-        ex_throw("init_socket");
-        return -1;
-    }
-
-    if (socket_bind(socket_holder, SERVER_PORT)) {
+    if (socket_create(&socket_holder)||socket_bind(socket_holder, SERVER_PORT)) {
         ex_throw("init_socket");
         return -1;
     }
@@ -227,7 +222,7 @@ static int server_loop() {
         else get_session_timeout_remain(earliest_session, request_timeout, &next_timeout);
 
         ex_try(); // 开启错误上下文
-        do_log(TRACE,"set sleep timeout %ld",next_timeout);
+        do_log(TRACE,"sleep with timeout %ld",next_timeout);
         socket_sleep_on(socket_holder, 1, next_timeout);
         if (!ex_catch()) {
             // 收取dns数据包，select没有错误
