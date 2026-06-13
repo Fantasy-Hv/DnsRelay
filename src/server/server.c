@@ -63,19 +63,19 @@ char* send_buf;
  * 将dns结构体序列化后发送到指定目标
  * @param dns_pack
  * @param dest
- * @return 0正常，-1错误
+ * @return 0 正常,1 错误
  */
 int packet_send(const DnsPacket* dns_pack,const NetEnd* dest) {
     if (!dns_pack || dest == NULL) {
         ex_throw("pack send: pack null or dest null");
-        return -1;
+        return 1;
     }
 
     const int raw_pack_size = pack_serialize(dns_pack, send_buf,DNS_SEND_BUF_SIZE);
     if (raw_pack_size < 0 || raw_pack_size > MAX_PACKET_SIZE)
-        return -1;
+        return 1;
 
-    return socket_send(socket_holder, send_buf, raw_pack_size, *dest) >= 0 ? 0 : -1;
+    return socket_send(socket_holder, send_buf, raw_pack_size, *dest) >= 0 ? 0 : 1;
 
 }
 
@@ -163,7 +163,8 @@ static void handle_dns_packet(const DnsPacket *packet_in, NetEnd source_end) {
         PacketDirection direction = pack_try_response_local(packet_in, &packet_out);
         if (direction == CLIENT) {
             //本地可以直接响应
-            packet_send(packet_out, &source_end);
+            if (packet_send(packet_out, &source_end))
+                do_log(ERROR,"local ans send failed : %s",ex_end());
             pack_free(packet_out);
         } // 需要转发
         else {
@@ -173,15 +174,16 @@ static void handle_dns_packet(const DnsPacket *packet_in, NetEnd source_end) {
                 // 没有id了，返回失败响应
                 do_log(WARN, "server : relay id exhausted,resp fallback");
                 pack_make_inner_error(packet_in, &packet_out);
-                packet_send(packet_out, &source_end);
+                if (packet_send(packet_out, &source_end))
+                    do_log(ERROR,"id-exhausted-servfail pack send failed :%s",ex_end());
                 pack_free(packet_out);
                 return;
             }
             //发送中继包
             pack_make_query_relay(packet_in, relay_id, &packet_out);
-            packet_send(packet_out, pick_upstream());
+
             // 发不出去
-            if (ex_catch()) {
+            if (packet_send(packet_out, pick_upstream())) {
                 do_log(ERROR, "server:relay_query send err,%s", ex_end());
                 id_free(relay_id);
                 pack_free(packet_out);
@@ -199,16 +201,15 @@ static void handle_dns_packet(const DnsPacket *packet_in, NetEnd source_end) {
         if (session) {
             //返回响应给客户端
             pack_make_response_relay(packet_in, &packet_out, session->client_id);
-            packet_send(packet_out, &session->client_ip);
 
-            if (ex_catch()) // 发不出去
-                do_log(ERROR, "server:relay-response ,%s", ex_end());
+            if (packet_send(packet_out, &session->client_ip)) // 发不出去
+                do_log(ERROR, "relay response send failed : %s", ex_end());
 
             //结束会话
             session_close(session);
             id_free(packet_in->header.id);
             pack_free(packet_out);
-        } else do_log(WARN, "server : no session match rsp id %d, drop pack",packet_in->header.id);
+        } else do_log(WARN, "no session match rsp id %d, drop pack",packet_in->header.id);
     }
 }
 
@@ -221,8 +222,8 @@ static int server_loop() {
             next_timeout = -1;
         else get_session_timeout_remain(earliest_session, request_timeout, &next_timeout);
 
-        ex_try(); // 开启错误上下文
         do_log(TRACE,"sleep with timeout %ld",next_timeout);
+        ex_try(); // 开启错误上下文
         socket_sleep_on(socket_holder, 1, next_timeout);
         if (!ex_catch()) {
             // 收取dns数据包，select没有错误
