@@ -4,9 +4,9 @@
 
 #define SERV_SECTION "server"
 
-//超时配置项,单位为秒
+//超时配置项,单位为毫秒
 #define KEY_PACKET_TIMEOUT "dns_packet_timeout"
-#define VALUE_DEFAULT_REQUEST_TIMEOUT 3
+#define VALUE_DEFAULT_REQUEST_TIMEOUT 3000
 
 //最大重试次数
 #define KEY_MAX_RETRY_TIME "max_retry_time"

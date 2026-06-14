@@ -14,7 +14,7 @@
 #include <string.h>
 
 #include "infra/exception.h"
-static ms request_timeout = VALUE_DEFAULT_REQUEST_TIMEOUT*1000;
+static ms request_timeout = VALUE_DEFAULT_REQUEST_TIMEOUT;
 static int max_retry_time = VALUE_DEFAULT_MAX_RETRY_TIME;
 #define DNS_RECV_BUF_SIZE 4096
 #define DNS_SEND_BUF_SIZE 4096
@@ -118,9 +118,21 @@ static int init_socket() {
 static void do_handle_timeout(Session* session) {
     uint16_t relay_id = session->relay_info.relay_packet->header.id;
     if (session->relay_info.retry_times >= max_retry_time) {
-        id_free(relay_id);
+
         do_log(WARN,"session (%d-%d) close after retrying %d times",session->client_id,relay_id,session->relay_info.retry_times);
+        // 超时返回SERVFAIL
+        // 构造响应包
+        DnsPacket* query = session->relay_info.relay_packet;
+        query->header.id = session->client_id;
+        DnsPacket* fail_pack;
+        pack_make_inner_error(query,&fail_pack);
+        // 发送
+       if ( packet_send(fail_pack,&session->client_ip))
+           do_log(ERROR,"session close reply pack send failed : %s",ex_end());
+        // 清理资源
         session_close(session);
+        pack_free(fail_pack);
+        id_free(relay_id);
         return;
     }
 
@@ -302,7 +314,7 @@ int server_config_parser(const char* key,const char* value,T* result) {
     }
 
     if (!strcmp(key,KEY_PACKET_TIMEOUT)) {
-        *result = (T) (atol(value) * 1000);
+        *result = (T) (atol(value));
         return 0;
     }
 
