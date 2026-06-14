@@ -14,6 +14,7 @@ int log_config_parser(const char *key, const char *value, T *result) {
     if (!strcmp(key,KEY_LOG_LEVEL)) {
         LogLevel level = TRACE;
 
+        // 遍历匹配日志等级
         while (level < LEVEL_NUM && strcasecmp(LEVEL_STR[level], value) != 0)
             level++;
 
@@ -21,15 +22,21 @@ int log_config_parser(const char *key, const char *value, T *result) {
         *result = (T) level;
         return 0;
     }
+
+    // 读取各级别输出通道配置
     for (int i = TRACE; i < LEVEL_NUM; i++) {
         if (strcasecmp(LEVEL_STR[i], key) == 0) {
+            //输出到tty
             if (strcasecmp(value, "stdout") == 0)
                 *result = stdout;
             else if (strcasecmp(value, "stderr") == 0)
                 *result = stderr;
+            // 输出到文件
             else {
+                // 截断文件
                 FILE *out = fopen(value, "w");
                 fclose(out);
+                // 重新设置为追加,实现多级别共输出
                 out = fopen(value, "a+");
 
                 if (out == NULL) {
@@ -62,10 +69,12 @@ int logger_init() {
  * @param ...
  */
 void do_log(LogLevel level, const char *format, ...) {
-    if (level < logging_level)return;
+    if (level < logging_level) return;
     FILE *channel = output_channels[level];
+
     //添加日志时间
     fprintf(channel, "t:%ld [%s] ", sys_time_ms() / 1000, LEVEL_STR[level]);
+
     //输出日志内容,下面这个是处理变参输出的模板代码
     va_list args = {0}; // 用这个变量指向可变参数列表
     va_start(args, format); //初始化

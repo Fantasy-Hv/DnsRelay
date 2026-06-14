@@ -29,8 +29,13 @@ int dns_resolver_config_parser(const char* key,const char* value,T* result){
 }
 
 int dns_resolver_init() {
+    // 注册到配置系统并获取配置
      config_register_parser(SECTION_DNS_RESOLVER,dns_resolver_config_parser);
-    return config_get(SECTION_DNS_RESOLVER,KEY_USE_CACHE,(T*)&use_cache);
+    return config_get(SECTION_DNS_RESOLVER,KEY_USE_CACHE,(T*)&use_cache) ==-1;
+}
+
+int is_using_cache() {
+    return use_cache;
 }
 /**
  * 将人类可读的域名字符串转为dns wire编码
@@ -135,7 +140,6 @@ ResourceRecord* rr_make_from_config_pair(const char* name, uint32_t ttl, Qtype t
     if (!name || !data) return NULL;
 
     ResourceRecord* rr = rr_create();
-    if (!rr) return NULL;
 
     rr->name = encode_name(name);
     if (!rr->name) {
@@ -253,14 +257,10 @@ DnsPacket *pack_create() {
 
 // 深拷贝RR
 ResourceRecord *rr_clone(const ResourceRecord *record) {
-    if (record == NULL) {
+    if (record == NULL)
         return NULL;
-    }
 
     ResourceRecord *copy_rr = rr_create();
-    if (copy_rr == NULL) {
-        return NULL;
-    }
 
     copy_rr->name = strdup(record->name);
     copy_rr->type = record->type;
@@ -289,13 +289,17 @@ ResourceRecord *rr_clone(const ResourceRecord *record) {
  */
 static Vector *rrs_clone(const Vector *RRS) {
     Vector *clony = vector_create(vector_size(RRS));
+
     for (int i = 0; i < vector_size(RRS); i++) {
+        // 准备
         const ResourceRecord *src = vector_get(RRS, i);
         ResourceRecord *item = malloc(sizeof(ResourceRecord));
+        // copy
         memcpy(item, src, sizeof(ResourceRecord));
         item->name = strdup(src->name);
         item->rdata = malloc(src->rdata_length);
         memcpy(item->rdata, src->rdata, src->rdata_length);
+        // add
         vector_add(clony, item);
     }
     return clony;
@@ -313,15 +317,6 @@ DnsPacket *packet_clone(const DnsPacket *source) {
 /**
  *
  * 解析域名字段
-* 以标准请求 ucloud.bupt.deu.cn 的响应为例
- * RR1：
- * name： 6 ucloud 4 bupt 3 edu 2 cn 0
-   rdata: 2 vn ( c0 ptr_offset_1 两字节指针，指向name的 4 bupt 3 edu 2 cn 0) // 完全可以在域名里藏指针
-   RR2：
-   name: (c0 ptr_offset_2 两字节指针，指向RR1的rdata
-
-   由此看出，域名解析是一个递归的过程。
-   一个域名字段中最多只会出现一个ptr
  * @param buf 数据流起始字节
  * @param cur_p 域名起始位置
  * @param res 解析后的dns域名（dns编码）
@@ -329,8 +324,20 @@ DnsPacket *packet_clone(const DnsPacket *source) {
  *
  */
 int name_deserialize(const char *buf, const char *cur_p, char **res) {
-    //dns编码的格式： n n个字符 m m个字符 两个字节指针
-    // 也就是说，指针会出现在完整标签之后，
+    /*
+    dns编码的格式： n n个字符 m m个字符 两个字节指针
+    也就是说，指针会出现在完整标签之后，
+    以标准请求 ucloud.bupt.deu.cn 的响应为例
+     RR1：
+            name： 6 ucloud 4 bupt 3 edu 2 cn 0
+            rdata: 2 vn ( c0 ptr_offset_1 两字节指针，指向name的 4 bupt 3 edu 2 cn 0) // 完全可以在域名里藏指针
+     RR2：
+         name: (c0 ptr_offset_2 两字节指针，指向RR1的rdata
+
+   由此看出，域名解析是一个递归的过程。
+   一个域名字段中最多只会出现一个ptr
+     */
+
     // 假设有指针，遍历确定指针位置
     int i = 0;
     while (cur_p[i] && (cur_p[i] & 0xC0) != 0xC0)
@@ -340,16 +347,18 @@ int name_deserialize(const char *buf, const char *cur_p, char **res) {
         *res = strdup(cur_p);
         return strlen(cur_p) + 1;
     }
-    // 到这里，说明cur_p[i]是指针头
+    // 到这里，说明cur_p[i]是指针头,获取指针:
     uint16_t offset;
     memcpy(&offset, (uint16_t *) &cur_p[i], 2);
     n2h_2(&offset);
     offset ^= 0xC000; //高两位置0
     char *suffix;
+    // 递归解析
     name_deserialize(buf, buf + offset, &suffix);
+    // 结果拼接
     *res = malloc(i + strlen(suffix) + 1);
-    memcpy(*res, cur_p, i); //第一段
-    memcpy(&(*res)[i], suffix, strlen(suffix) + 1); //第二段
+    memcpy(*res, cur_p, i); // 前一段域名
+    memcpy(&(*res)[i], suffix, strlen(suffix) + 1); // 后一段域名
     free(suffix);
     // 一个域名字段只会有一个指针,并且指针是域名最后两个字节，所以到此为止了
     return i + 2;
@@ -367,7 +376,7 @@ static int find_previous_name(const char *start_i, const char *end_e, const char
     while (strcmp(j, name) && j < end_e)
         j++;
     // str_j == name || j=end_e
-    if (j == end_e)return 0;
+    if (j == end_e) return 0;
     *offset = j - start_i;
     return 1;
 }
@@ -406,18 +415,21 @@ int name_serialize(const char *name, char *const buf, char *const cur_p) {
  */
 static int question_deserialize(const char *cur_p, SectionQuestion *question) {
     //name,正常dns编码，不会出现指针
-    if (question==NULL)return 0;
+    if (question==NULL) return 0;
     const char *cursor = cur_p;
     question->qname = strdup(cur_p); //dns编码域名是合规的c字符串。
     cursor += strlen(question->qname) + 1; //strlen不算\0
+
     // type
     memcpy(&question->qtype, cursor, 2);
     n2h_2(&question->qtype);
     cursor += 2;
+
     //uint16 qclass
     memcpy(&question->qclass, cursor, 2);
     n2h_2(&question->qclass);
     cursor += 2;
+
     return cursor - cur_p;
 }
 
@@ -432,14 +444,17 @@ static int question_serialize(const SectionQuestion *const question, char *cur_p
     // qname
     strcpy(cursor, question->qname);
     cursor += strlen(question->qname) + 1; //strlen不算\0
+
     // type
     memcpy(cursor, &question->qtype, 2);
     h2n_2((uint16_t *) cursor);
     cursor += 2;
+
     //uint16 qclass
     memcpy(cursor, &question->qclass, 2);
     h2n_2((uint16_t *) cursor);
     cursor += 2;
+
     return cursor - cur_p;
 }
 
@@ -452,9 +467,9 @@ static int question_serialize(const SectionQuestion *const question, char *cur_p
  */
 static int questions_serialize(const Vector *const questions, int qc, char *const cur_p) {
     char *cursor = cur_p;
-    for (int i = 0; i < qc; i++) {
+    for (int i = 0; i < qc; i++)
         cursor += question_serialize(vector_get(questions, i), cursor);
-    }
+
     return cursor - cur_p;
 }
 
@@ -490,18 +505,22 @@ void rdata_deserialize(const char *start_p, const char *cur_p, ResourceRecord *r
             name_deserialize(start_p, cur_p, &rr->rdata);
             rr->rdata_length = strlen(rr->rdata) + 1; //已经解析好纯域名了
             break;
+
         case QTYPE_MX: // 两字节无符号preference + dns编码域名
             uint16_t preference;
             memcpy(&preference, cur_p, 2); // 保持大端，因为序列化时不会处理这个数据
+            // 解析域名
             char *name;
             name_deserialize(start_p, cur_p + 2, &name);
             int namel = strlen(name) + 1;
+            // 设置字段
             rr->rdata = malloc(2 + namel);
             memcpy(&rr->rdata, &preference, 2);
             memcpy(&rr->rdata[2], name, namel);
             rr->rdata_length = 2 + namel;
             free(name);
             break;
+
         default:
             rr->rdata = malloc(rr->rdata_length);
             memcpy(rr->rdata, cur_p, rr->rdata_length);
@@ -518,22 +537,27 @@ int rr_deserialize(const char *start_p, const char *cur_p, ResourceRecord *const
     // cur_p ： 指向下一个待解析的字节
     const char *cursor = cur_p;
     cursor += name_deserialize(start_p, cursor, &rr->name);
+
     //type
     memcpy(&rr->type, cursor, 2);
     n2h_2(&rr->type);
     cursor += 2;
+
     //class
     memcpy(&rr->class, cursor, 2);
     n2h_2(&rr->class);
     cursor += 2;
+
     // uint32  ttl
     memcpy(&rr->ttl, cursor, 4);
     n2h_4(&rr->ttl);
+
     cursor += 4;
     //2B rdata_length
     memcpy(&rr->rdata_length, cursor, 2);
     n2h_2(&rr->rdata_length);
     cursor += 2;
+
     // rdata
     int rlen = rr->rdata_length;
     rdata_deserialize(start_p, cursor, rr);
@@ -569,23 +593,28 @@ static int rr_serialize(char *start_p, char *cur_p, const ResourceRecord *const 
     char *cursor = cur_p;
     //name
     cursor += name_serialize(rr->name, start_p, cursor);
+
     //type
     memcpy(cursor, &rr->type, 2);
     h2n_2((uint16_t *) cursor);
     cursor += 2;
+
     //class
     memcpy(cursor, &rr->class, 2);
     h2n_2((uint16_t *) cursor);
     cursor += 2;
+
     //ttl
     memcpy(cursor, &rr->ttl, 4);
     h2n_4((uint32_t *) cursor);
     cursor += 4;
+
     //len
     memcpy(cursor, &rr->rdata_length, 2);
     h2n_2((uint16_t *) cursor);
     cursor += 2;
-    // rdata ,这里域名指针可用可不用，因为大多数情况也不会超尺寸
+
+    //rdata
     memcpy(cursor, rr->rdata, rr->rdata_length);
     cursor += rr->rdata_length;
     return cursor - cur_p;
@@ -629,7 +658,8 @@ int pack_serialize(const DnsPacket *dns_pack, char *const packet_buf, int buf_si
     memcpy(cursor, &dns_pack->header, sizeof(SectionHeader));
     header_endian_2n((SectionHeader *) cursor);
     cursor += sizeof(SectionHeader);
-    if (cursor - packet_buf > buf_size)return -1;
+    if (cursor - packet_buf > buf_size)
+        return -1;
 
     //question
     cursor += questions_serialize(dns_pack->questions, dns_pack->header.qcount, cursor);
@@ -639,10 +669,10 @@ int pack_serialize(const DnsPacket *dns_pack, char *const packet_buf, int buf_si
     }
 
     // answer 、authority 、 additional
-    int rrs_c = dns_pack->header.answer_RRs+dns_pack->header.authority_RRs+dns_pack->header.additional_RRs;
-    cursor += rrs_serialize(dns_pack->rrs,rrs_c,packet_buf,cursor,buf_size);
+    int rrs_c = dns_pack->header.answer_RRs + dns_pack->header.authority_RRs + dns_pack->header.additional_RRs;
+    cursor += rrs_serialize(dns_pack->rrs, rrs_c, packet_buf, cursor, buf_size);
 
-    do_log(TRACE,"pac_seried_size %d",cursor-packet_buf);
+    do_log(TRACE, "pac_seried_size %d", cursor - packet_buf);
     return cursor - packet_buf;
 }
 
@@ -654,8 +684,8 @@ int pack_serialize(const DnsPacket *dns_pack, char *const packet_buf, int buf_si
  * @return 0-解析成功，-1解析失败
  */
 int pack_deserialize(const char *raw_pack, int len, DnsPacket **packet) {
-    if (len > 512||len<12) {
-        ex_throw("pack_deseri: raw size incorrect : %d",len);
+    if (len > 512 || len < 12) {
+        ex_throw("pack_deseri: raw size incorrect : %d", len);
         return -1;
     }
     do_log(TRACE, "raw pack size %d", len);
@@ -672,8 +702,8 @@ int pack_deserialize(const char *raw_pack, int len, DnsPacket **packet) {
 
     // questions
     cursor += questions_deserialize(cursor, pac->header.qcount, pac->questions);
-    int rr_c = pac->header.additional_RRs+pac->header.answer_RRs+pac->header.authority_RRs;
-    cursor += rrs_deserialize(raw_pack,cursor,rr_c,pac->rrs);
+    int rr_c = pac->header.additional_RRs + pac->header.answer_RRs + pac->header.authority_RRs;
+    cursor += rrs_deserialize(raw_pack, cursor, rr_c, pac->rrs);
 
     *packet = pac;
     do_log(DEBUG, "deseried pack  :%s", packet_to_log_string(pac));
@@ -690,7 +720,7 @@ int packet_is_query(const DnsPacket *packet) {
 }
 
 static int setRcode(DnsPacket *pack, Rcode rcode) {
-    if (!pack)return -1;
+    if (!pack) return -1;
     // 16 位，设置低4位，
     pack->header.flags &= 0xfff0; // 全部清零
     pack->header.flags |= 0x000f & rcode; //  直接覆盖
@@ -704,12 +734,15 @@ static int setRcode(DnsPacket *pack, Rcode rcode) {
 static int make_response_empty(const DnsPacket *query, DnsPacket **empty_response) {
     DnsPacket *response = pack_create();
     response->header = query->header;
+    //header.flags
     RA_SET(response->header.flags);
     QR_SET(response->header.flags);
     setRcode(response, RCODE_NOERROR);
+    // header.cnts
     response->header.answer_RRs = 0;
     response->header.additional_RRs = 0;
     response->header.authority_RRs = 0;
+    // question
     response->questions = questions_clone(query->questions);
     *empty_response = response;
     return 0;
@@ -795,7 +828,10 @@ int pack_make_query_relay(const DnsPacket *query_pack, uint16_t relay_id, DnsPac
  */
 void pack_make_response_relay(const DnsPacket *recv, DnsPacket **send, uint16_t client_id) {
     *send = packet_clone(recv);
-    (*send)->header.id = client_id;
+    (*send)->header.id = client_id;  // 仅修改id
+
+    // 不启用缓存则直接返回
+    if (!use_cache) return;
     // 缓存资源记录
     SectionQuestion * q = vector_get(recv->questions,0);
     CacheValue value;
@@ -850,10 +886,13 @@ PacketDirection pack_try_response_local(const DnsPacket *query, DnsPacket **resp
             do_log(INFO, "id %d,qname: [%s]", query->header.id, q->qname);
             if (!use_cache||dns_cache_get(q->qname, q->qtype, q->qclass, &cache_value)) {
                 // 缓存没有，看Rd
-                do_log(DEBUG, "cache miss");
+                if (use_cache)
+                    do_log(DEBUG, "cache miss");
+
                 if (RD_GET(query->header.flags))
                     return UPSTREAM;
-                // 不需要转发
+
+                // 客户端不要求递归查询,直接返回
                 make_response_empty(query, response);
                 break;
             }
@@ -861,6 +900,7 @@ PacketDirection pack_try_response_local(const DnsPacket *query, DnsPacket **resp
             do_log(DEBUG, "cache hit");
             pack_make_std_response_local(query, response, cache_value);
             free_rrs(cache_value.rrs);
+
             // 后置业务检查
             query_post_validate(*response, &code);
             if (code != RCODE_NOERROR) {
@@ -874,10 +914,12 @@ PacketDirection pack_try_response_local(const DnsPacket *query, DnsPacket **resp
             do_log(DEBUG, "iquery recv");
             make_response_fail(query, response, RCODE_NOTIMP);
             break;
+
         case STATUS:
             do_log(DEBUG, "status query recv");
             make_response_status(query, response);
             break;
+
         default: make_response_empty(query, response);
     }
     return CLIENT;

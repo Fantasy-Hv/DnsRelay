@@ -18,27 +18,23 @@
  * - free: 释放数组和结构体本身
  */
 static int vector_grow(Vector *vector, int min_capacity) {
-    if (vector == NULL) {
-        return 0;
-    }
 
-    if (min_capacity <= vector->capacity) {
+    if (min_capacity <= vector->capacity)
         return 1;
-    }
 
     int temp_capacity = vector->capacity;
-    if (vector->capacity <= 0) {
+    if (vector->capacity <= 0)
         temp_capacity = 1;
-    }
 
-    while (min_capacity > temp_capacity) {
+
+    while (min_capacity > temp_capacity)
         temp_capacity <<= 1;
-    }
+
 
     T *temp_elements = realloc(vector->elements, sizeof(T) * temp_capacity);
-    if (temp_elements == NULL) {
+    if (temp_elements == NULL)
         return 0;
-    }
+
 
     vector->elements = temp_elements;
     vector->capacity = temp_capacity;
@@ -47,14 +43,14 @@ static int vector_grow(Vector *vector, int min_capacity) {
 
 
 Vector* vector_create(int init_capacity) {
-    if (init_capacity <= 0) {
+    if (init_capacity <= 0)
         init_capacity = 1;
-    }
+
 
     Vector *vector = malloc(sizeof(Vector));
-    if (vector == NULL) {
+    if (vector == NULL)
         return NULL;
-    }
+
 
     vector->elements = malloc(sizeof(T) * init_capacity);
     if (vector->elements == NULL) {
@@ -74,13 +70,11 @@ Vector* vector_create(int init_capacity) {
  */
 void vector_add(Vector* vector,T element) {
 
-    if (vector == NULL) {
-        return;
-    }
+    if (vector == NULL) return;
 
-    if (!vector_grow(vector, vector->size + 1)) {
+
+    if (!vector_grow(vector, vector->size + 1))
         return;
-    }
 
     vector->elements[vector->size] = element;
     vector->size++;
@@ -93,17 +87,14 @@ void vector_add(Vector* vector,T element) {
  * @param index
  */
 void vector_insert(Vector* vector,T element,int index) {
-    if (vector == NULL || index < 0 || index > vector->size) {
+    if (vector == NULL || index < 0 || index > vector->size)
         return;
-    }
 
-    if(! vector_grow(vector,vector->size + 1)) {
+    if(! vector_grow(vector,vector->size + 1))
         return;
-    }
 
-    for(int i = vector->size - 1;i >= index;i --) {
+    for(int i = vector->size - 1;i >= index;i --)
         vector->elements[i + 1] = vector->elements[i];
-    }
 
     vector->elements[index] = element;
     vector->size ++;
@@ -111,9 +102,8 @@ void vector_insert(Vector* vector,T element,int index) {
 
 void vector_remove(Vector *vector,int index) {
 
-    if (vector == NULL || index >= vector->size || index < 0) {
+    if (vector == NULL || index >= vector->size || index < 0)
         return;
-    }
 
     memmove(vector->elements + index,vector->elements + index + 1,sizeof(T) * (vector->size - index - 1) );
 
@@ -123,9 +113,8 @@ void vector_remove(Vector *vector,int index) {
 T vector_get(const Vector* vector,int index) {
 
 
-    if (vector == NULL || index >= vector->size || index < 0) {
+    if (vector == NULL || index >= vector->size || index < 0)
         return NULL;
-    }
 
     return vector->elements[index];
 }
@@ -137,28 +126,25 @@ T vector_get(const Vector* vector,int index) {
  */
 int vector_size(const Vector* vector) {
 
-    if (vector == NULL ) {
-        return 0;
-    }
+    if (vector == NULL ) return 0;
 
     return vector->size;
 }
 
 void vector_free(Vector* vector) {
 
-    if (vector == NULL) {
-        return;
-    }
+    if (vector == NULL) return;
+
     free(vector->elements);
     free(vector);
 }
 
 //---------------------------------------
 static LinkedNode *linked_node_create(T data) {
+
     LinkedNode *node = malloc(sizeof(LinkedNode));
-    if (node == NULL) {
-        return NULL;
-    }
+    if (node == NULL) return NULL;
+
     node->data = data;
     node->prev = NULL;
     node->next = NULL;
@@ -166,10 +152,11 @@ static LinkedNode *linked_node_create(T data) {
 }
 
 LinkedList* linked_list_create() {
+
     LinkedList *list = malloc(sizeof(LinkedList));
-    if (list == NULL) {
+    if (list == NULL)
         return NULL;
-    }
+
     list->head = NULL;
     list->tail = NULL;
     list->size = 0;
@@ -177,42 +164,39 @@ LinkedList* linked_list_create() {
 }
 
 void linked_list_addFirst(LinkedList* list,T data) {
-    if (list == NULL) {
-        return;
-    }
+
+    if (list == NULL) return;
+
 
     LinkedNode *node = linked_node_create(data);
-    if (node == NULL) {
-        return;
-    }
+    if (node == NULL) return;
+
 
     node->next = list->head;
-    if (list->head != NULL) {
+    if (list->head != NULL)
         list->head->prev = node;
-    } else {
-        list->tail = node;
-    }
+     else
+         list->tail = node;
+
 
     list->head = node;
     list->size++;
 }
 
 void linked_list_addLast(LinkedList* list,T data) {
-    if (list == NULL) {
-        return;
-    }
+    if (list == NULL) return;
+
 
     LinkedNode *node = linked_node_create(data);
-    if (node == NULL) {
-        return;
-    }
+    if (node == NULL) return;
+
 
     node->prev = list->tail;
-    if (list->tail != NULL) {
+    if (list->tail != NULL)
         list->tail->next = node;
-    } else {
+    else
         list->head = node;
-    }
+
 
     list->tail = node;
     list->size++;
@@ -224,25 +208,23 @@ void linked_list_addLast(LinkedList* list,T data) {
  * @param comparator 元素比较函数
  */
 void linked_list_remove(LinkedList* list,T data,Comparator comparator) {
-    if (list == NULL || comparator == NULL) {
+
+    if (list == NULL || comparator == NULL)
         return;
-    }
 
     LinkedNode *node = list->head;
     while (node != NULL) {
         LinkedNode *next = node->next;
         if (comparator(node->data, data) == 0) {
-            if (node->prev != NULL) {
+            if (node->prev != NULL)
                 node->prev->next = node->next;
-            } else {
+             else
                 list->head = node->next;
-            }
 
-            if (node->next != NULL) {
+            if (node->next != NULL)
                 node->next->prev = node->prev;
-            } else {
+             else
                 list->tail = node->prev;
-            }
 
             free(node);
             list->size--;
@@ -255,16 +237,15 @@ int linked_list_is_empty(LinkedList* list) {
     return list == NULL || list->size == 0;
 }
 void linked_list_foreach(LinkedList * list,void (*consumer)(T value)) {
-    if (list==NULL||consumer==NULL)return;
+    if (list == NULL || consumer == NULL) return;
 
-    for (LinkedNode *node = list->head;node!=NULL;node = node->next)
+    for (LinkedNode *node = list->head; node != NULL; node = node->next)
         consumer(node->data);
 
 }
 void linked_list_clear(LinkedList*list) {
-    if (list == NULL) {
-        return;
-    }
+
+    if (list == NULL) return;
 
     LinkedNode *node = list->head;
     while (node != NULL) {
@@ -279,56 +260,38 @@ void linked_list_clear(LinkedList*list) {
 }
 
 void linked_list_free(LinkedList* list) {
-    if (list == NULL) {
-        return;
-    }
+
+    if (list == NULL) return;
+
     linked_list_clear(list);
     free(list);
 }
 
-//-------------------------------
-// typedef struct HeapNode {
-//     T data;
-//     char is_deleted;
-// } HeapElement;
 
-// /**
-//  * 最小值优先的队列，自扩容
-//  * 允许删除元素，删除元素时，会将所有相同元素都删除
-//  *
-//  */
-// typedef struct  {
-//     Comparator comparator;
-//     HeapElement * elements;
-//     int size; // 当前元素数量（包括逻辑删除的元素）
-//     int capacity; //当前容量
+static int heap_element_compare(const LazyHeap *queue, const HeapElement *a, const HeapElement *b) {
 
-// }LazyHeap;
-static int heap_element_compare(const LazyHeap *queue,
-                                const HeapElement *a,
-                                const HeapElement *b) {
-    if (a == NULL || b == NULL) {
+    if (a == NULL || b == NULL)
         return 0;
-    }
-    if (a->is_deleted && b->is_deleted) {
+
+    if (a->is_deleted && b->is_deleted)
         return 0;
-    }
-    if (a->is_deleted) {
+
+    if (a->is_deleted)
         return -1;
-    }
-    if (b->is_deleted) {
+
+    if (b->is_deleted)
         return 1;
-    }
-    if (queue == NULL || queue->comparator == NULL) {
+
+    if (queue == NULL || queue->comparator == NULL)
         return 0;
-    }
+
     return queue->comparator(a->data, b->data);
 }
 
-static void down(LazyHeap* queue,int u){
-    if (queue == NULL || u <= 0 || u > queue->size) {
+static void down(const LazyHeap* queue, int u){
+
+    if (queue == NULL || u <= 0 || u > queue->size)
         return;
-    }
 
     while (1) {
         int t = u;
@@ -336,17 +299,17 @@ static void down(LazyHeap* queue,int u){
         int right = u * 2 + 1;
 
         if (left <= queue->size &&
-            heap_element_compare(queue, queue->elements[t], queue->elements[left]) > 0) {
+            heap_element_compare(queue, queue->elements[t], queue->elements[left]) > 0)
             t = left;
-        }
 
-        if (right <= queue->size &&
-            heap_element_compare(queue, queue->elements[t], queue->elements[right]) > 0) {
+
+        if (right <= queue->size
+            && heap_element_compare(queue, queue->elements[t], queue->elements[right]) > 0)
             t = right;
-        }
-        if (t == u) {
-            return;
-        }
+
+
+        if (t == u) return;
+
         HeapElement* temp = queue->elements[t];
         queue->elements[t] = queue->elements[u];
         queue->elements[u] = temp;
@@ -356,9 +319,9 @@ static void down(LazyHeap* queue,int u){
 }
 
 static void up(LazyHeap* queue,int u){
-    if (queue == NULL || u <= 0 || u > queue->size) {
+
+    if (queue == NULL || u <= 0 || u > queue->size)
         return;
-    }
 
     while (1) {
         int t = u / 2;
@@ -367,47 +330,42 @@ static void up(LazyHeap* queue,int u){
             queue->elements[t] = queue->elements[u];
             queue->elements[u] = temp;
             u = t;
-        } else {
-            return;
         }
+        else return;
+
     }
 }
 
 static int priority_queue_grow(LazyHeap* queue,int min_capacity) {
-    if (queue == NULL) {
-        return 0;
-    }
+    if (queue == NULL) return 0;
 
-    if (min_capacity <= queue->capacity) {
+    if (min_capacity <= queue->capacity)
         return 1;
-    }
 
     int temp_capacity = queue->capacity;
-    if (temp_capacity <= 0) {
+    if (temp_capacity <= 0)
         temp_capacity = 1;
-    }
 
-    while (min_capacity > temp_capacity) {
+    while (min_capacity > temp_capacity)
         temp_capacity <<= 1;
-    }
 
     HeapElement** temp = realloc(queue->elements, sizeof(HeapElement*) * (size_t)(temp_capacity + 1));
-    if (temp == NULL) {
+    if (temp == NULL)
         return 0;
-    }
+
     queue->elements = temp;
     queue->capacity = temp_capacity;
+
     return 1;
 }
 
 LazyHeap* lazy_heap_create(Comparator comparator) {
-    if (comparator == NULL) {
-        return NULL;
-    }
+    if (comparator == NULL) return NULL;
+
     LazyHeap* queue = malloc(sizeof(LazyHeap));
-    if (queue == NULL) {
+    if (queue == NULL)
         return NULL;
-    }
+
 
     const int init_capacity = 16;
     queue->elements = malloc(sizeof(HeapElement*) * (init_capacity + 1));
@@ -419,6 +377,7 @@ LazyHeap* lazy_heap_create(Comparator comparator) {
     queue->capacity = init_capacity;
     queue->survivor_table = hash_map_create(hash_func_uint64,compare_uint);
     queue->size = 0;
+
     return queue;
 }
 
@@ -429,13 +388,11 @@ LazyHeap* lazy_heap_create(Comparator comparator) {
  * @param data
  */
 void lazy_heap_add(LazyHeap* queue,K key,T data) {
-    if (queue == NULL) {
-        return;
-    }
 
-    if (!priority_queue_grow(queue, queue->size + 1)) {
+    if (queue == NULL) return;
+
+    if (!priority_queue_grow(queue, queue->size + 1))
         return;
-    }
 
     queue->size ++;
     HeapElement *element = malloc(sizeof(HeapElement));
@@ -459,29 +416,30 @@ static void do_delete(LazyHeap* queue) {
 
 //取最小的元素，如果队列为空，返回NULL
 T lazy_heap_pop(LazyHeap* queue) {
-    if (queue == NULL || queue->size == 0) {
+    if (queue == NULL || queue->size == 0)
         return NULL;
-    }
+
     do_delete(queue);
 
-    if (queue->size == 0) {
+    if (queue->size == 0)
         return NULL;
-    }
+
     HeapElement temp_element = *queue->elements[1];
     free(queue->elements[1]);
     queue->elements[1] = queue->elements[queue->size--];
     down(queue, 1);
+
     return temp_element.data;
 }
 T lazy_heap_peek(LazyHeap* queue) {
-    if (queue == NULL || queue->size == 0) {
+    if (queue == NULL || queue->size == 0)
         return NULL;
-    }
+
     do_delete(queue);
 
-    if (queue->size == 0) {
+    if (queue->size == 0)
         return NULL;
-    }
+
     return queue->elements[1]->data;
 }
 
@@ -492,9 +450,8 @@ T lazy_heap_peek(LazyHeap* queue) {
  * @param data
  */
 void lazy_heap_remove(LazyHeap* queue,K key) {
-    if (queue == NULL || queue->comparator == NULL) {
+    if (queue == NULL || queue->comparator == NULL)
         return;
-    }
 
     HeapElement * element;
     if (!hash_map_get(queue->survivor_table,key,(T*)&element)) {
@@ -505,9 +462,8 @@ void lazy_heap_remove(LazyHeap* queue,K key) {
 
 }
 void lazy_heap_free(LazyHeap* queue) {
-    if (queue == NULL) {
-        return;
-    }
+    if (queue == NULL) return;
+
     hash_map_free(queue->survivor_table); // hashmap里面的东西都只是纯数字，不需要释放
     free(queue->elements);
     free(queue);
@@ -524,10 +480,11 @@ typedef struct {
 #define HASH_MAP_DEFAULT_LOAD_FACTOR 0.75f
 
 static HashMapEntry *hash_map_entry_create(K key, T data) {
+
     HashMapEntry *entry = malloc(sizeof(HashMapEntry));
-    if (entry == NULL) {
+    if (entry == NULL)
         return NULL;
-    }
+
     entry->key = key;
     entry->data = data;
     return entry;
@@ -540,51 +497,53 @@ static LinkedList *hash_map_bucket_at(HashMap *map, int index) {
 static int hash_map_bucket_index(HashMap *map, K key, int bucket_count) {
     // 哈希函数只负责产生整数；真正的桶下标还要对桶数量取模。
     int hash = map->hash_function(key);
-    if (hash == INT32_MIN) {
+
+    if (hash == INT32_MIN)
         hash = 0;
-    } else if (hash < 0) {
+    else if (hash < 0)
         hash = -hash;
-    }
+
     return hash % bucket_count;
 }
 
 static LinkedNode *hash_map_find_node(HashMap *map, LinkedList *bucket, K key) {
-    if (map == NULL || bucket == NULL) {
+    if (map == NULL || bucket == NULL)
         return NULL;
-    }
+
 
     // 同一个桶里可能挂多个 entry，靠 comparator 在链表中做精确匹配。
     LinkedNode *node = bucket->head;
     while (node != NULL) {
+
         HashMapEntry *entry = node->data;
-        if (entry != NULL && map->comparator(entry->key, key) == 0) {
+        if (entry != NULL && map->comparator(entry->key, key) == 0)
             return node;
-        }
+
         node = node->next;
     }
     return NULL;
 }
 
 static int hash_map_resize(HashMap *map, int new_bucket_count) {
-    if (map == NULL || new_bucket_count <= 0) {
+    if (map == NULL || new_bucket_count <= 0)
         return 0;
-    }
 
     // 扩容不是单纯把 buckets 变大，而是要把旧元素全部重新分桶。
     Vector *new_buckets = vector_create(new_bucket_count);
-    if (new_buckets == NULL) {
+    if (new_buckets == NULL)
         return 0;
-    }
 
     for (int i = 0; i < new_bucket_count; i++) {
+
         LinkedList *bucket = linked_list_create();
         if (bucket == NULL) {
-            for (int j = 0; j < vector_size(new_buckets); j++) {
+            for (int j = 0; j < vector_size(new_buckets); j++)
                 linked_list_free(vector_get(new_buckets, j));
-            }
+
             vector_free(new_buckets);
             return 0;
         }
+
         vector_add(new_buckets, bucket);
     }
 
@@ -630,9 +589,9 @@ HashMap * hash_map_create(HashFunction hash_function,Comparator comparator) {
     for (int i = 0; i < HASH_MAP_INIT_BUCKETS; i++) {
         LinkedList *bucket = linked_list_create();
         if (bucket == NULL) {
-            for (int j = 0; j < vector_size(map->buckets); j++) {
+            for (int j = 0; j < vector_size(map->buckets); j++)
                 linked_list_free(vector_get(map->buckets, j));
-            }
+
             vector_free(map->buckets);
             free(map);
             return NULL;
@@ -649,9 +608,8 @@ HashMap * hash_map_create(HashFunction hash_function,Comparator comparator) {
 
 //释放哈希表使用的所有内存
 void hash_map_free(HashMap* map) {
-    if (map == NULL) {
-        return;
-    }
+
+    if (map == NULL) return;
 
     const int bucket_count = vector_size(map->buckets);
     for (int i = 0; i < bucket_count; i++) {
@@ -671,9 +629,8 @@ void hash_map_free(HashMap* map) {
 
 
 int hash_map_put(HashMap* map,K key,T data) {
-    if (map == NULL) {
-        return 1;
-    }
+
+    if (map == NULL) return 1;
 
     // 先定位桶，再在桶里查是“更新旧值”还是“追加新 entry”。
     int bucket_count = vector_size(map->buckets);
@@ -687,33 +644,33 @@ int hash_map_put(HashMap* map,K key,T data) {
     }
 
     HashMapEntry *entry = hash_map_entry_create(key, data);
-    if (entry == NULL) {
+    if (entry == NULL)
         return 1;
-    }
+
     linked_list_addLast(bucket, entry);
     map->size++;
 
     // 装填因子过高时扩容，避免桶内链表过长。
     const float threshold = (float) bucket_count * map->load_factor;
-    if ((float) map->size > threshold) {
+    if ((float) map->size > threshold)
         hash_map_resize(map, bucket_count * 2);
-    }
+
     return 0;
 }
 
 int hash_map_get(HashMap* map,K key,T* result) {
-    if (map == NULL || result == NULL) {
+    if (map == NULL || result == NULL)
         return 1;
-    }
+
 
     // get 和 put 一样，先根据 key 找桶，再在桶内做线性查找。
     int bucket_count = vector_size(map->buckets);
     int bucket_index = hash_map_bucket_index(map, key, bucket_count);
     LinkedList *bucket = hash_map_bucket_at(map, bucket_index);
     LinkedNode *node = hash_map_find_node(map, bucket, key);
-    if (node == NULL) {
+    if (node == NULL)
         return 1;
-    }
+
 
     HashMapEntry *entry = node->data;
     *result = entry->data;
@@ -721,33 +678,30 @@ int hash_map_get(HashMap* map,K key,T* result) {
 }
 
 void hash_map_remove(HashMap* map,K key,KeyDestructor destructor) {
-    if (map == NULL ) {
-        return;
-    }
+
+    if (map == NULL ) return;
 
     int bucket_count = vector_size(map->buckets);
     int bucket_index = hash_map_bucket_index(map, key, bucket_count);
     LinkedList *bucket = hash_map_bucket_at(map, bucket_index);
     LinkedNode *node = hash_map_find_node(map, bucket, key);
-    if (node == NULL) {
+    if (node == NULL)
         return;
-    }
+
 
     HashMapEntry *entry = node->data;
     // 直接在桶链表中摘节点，不需要全表搬移元素。
-    if (node->prev != NULL) {
+    if (node->prev != NULL)
         node->prev->next = node->next;
-    } else {
-        bucket->head = node->next;
-    }
-    if (node->next != NULL) {
+    else  bucket->head = node->next;
+
+    if (node->next != NULL)
         node->next->prev = node->prev;
-    } else {
-        bucket->tail = node->prev;
-    }
-    if (destructor != NULL) {
+     else bucket->tail = node->prev;
+
+    if (destructor != NULL)
         destructor(entry->key);
-    }
+
     free(entry);
     free(node);
     bucket->size--;

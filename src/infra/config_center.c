@@ -163,12 +163,15 @@ int config_inject(const char* section,const char *key,const char* value) {
         } else free(config_value->value);
     } // 没有配置值，新建一项
     else config_value = entry_create();
+
+    // 注入
     config_value->is_cook = 0;
     config_value->value = strdup(value);
 
     K new_key = strdup(key);
     if (hash_map_put(sec->entries, new_key, config_value)) // 如果原来已经存有一份相等的key
         free(new_key);
+
     return 0;
 }
 /**
@@ -196,6 +199,7 @@ int config_load_file(const char * filepath) {
 
         if (*nc == '#') continue;
         if (*nc == '[') {
+            // 读section
             nc++;
             while (isspace((unsigned char)*nc))nc++; //跳过空白符
             while (nc[token_len] != ']' && !isspace((unsigned char)nc[token_len])) token_len++;
@@ -204,7 +208,7 @@ int config_load_file(const char * filepath) {
             memcpy(cur_section_str, nc, token_len);
             cur_section_str[token_len] = '\0';
         } else {
-            // k-v对
+            // 读k-v对
             //读key
             while (nc[token_len] != '=' && !isspace((unsigned char)nc[token_len]))token_len++;
             if (nc[token_len] == '\0') break;

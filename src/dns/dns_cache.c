@@ -52,20 +52,17 @@ static DnsCache *g_cache;
  * 返回值调用者需 free。
  */
 static char *cache_key_create(const char *qname, uint16_t qtype, uint16_t qclass) {
-    if (qname == NULL) {
-        return NULL;
-    }
 
     // 计算格式化的字符串所需要的长度，以便后续动态分配恰好大小的缓冲区
     const int key_len = snprintf(NULL, 0, "%u|%u|%s", qclass, qtype, qname);
-    if (key_len < 0) {
+    if (key_len < 0)
         return NULL;
-    }
+
 
     char *key = malloc((size_t) key_len + 1);
-    if (key == NULL) {
+    if (key == NULL)
         return NULL;
-    }
+
     snprintf(key, (size_t) key_len + 1, "%u|%u|%s", qclass, qtype, qname);
     return key;
 }
@@ -78,12 +75,14 @@ static char *cache_key_create(const char *qname, uint16_t qtype, uint16_t qclass
  * 释放 CacheValue 中的所有 RR 及 Vector 容器本身。
  */
 static void free_cache_value(CacheValue *value) {
-    if (value == NULL || value->rrs == NULL) {
+    if (value == NULL || value->rrs == NULL)
         return;
-    }
-    for (int i = 0; i < vector_size(value->rrs); i++) {
+
+    //释放列表中的RR
+    for (int i = 0; i < vector_size(value->rrs); i++)
         rr_free(vector_get(value->rrs, i));
-    }
+
+    // 释放列表
     vector_free(value->rrs);
     value->rrs = NULL;
     value->answer_RRs = 0;
@@ -97,9 +96,9 @@ static void free_cache_value(CacheValue *value) {
  * @return 0-失败，1-成功
  */
 static int cache_value_clone(CacheValue *dst, const CacheValue *src) {
-    if (dst == NULL || src == NULL) {
+    if (dst == NULL || src == NULL)
         return 0;
-    }
+
 
     const int src_size = src->rrs ? vector_size(src->rrs) : 0;
     const int init_cap = src_size > 0 ? src_size : 4;
@@ -108,9 +107,9 @@ static int cache_value_clone(CacheValue *dst, const CacheValue *src) {
     dst->authority_RRs = src->authority_RRs;
     dst->additional_RRs = src->additional_RRs;
     dst->rrs = vector_create(init_cap);
-    if (dst->rrs == NULL) {
+    if (dst->rrs == NULL)
         return 0;
-    }
+
 
     for (int i = 0; i < src_size; i++) {
         ResourceRecord *copy = rr_clone(vector_get(src->rrs, i));
@@ -155,9 +154,9 @@ static CacheEntry *cache_entry_create(const char *qname, uint16_t qtype, uint16_
  * 释放 CacheEntry 及其持有的所有内存（key + CacheValue 中的 RR 列表）。
  */
 static void cache_entry_free(CacheEntry *entry) {
-    if (entry == NULL) {
+    if (entry == NULL)
         return;
-    }
+
     free(entry->key);
     free_cache_value(&entry->value);
     free(entry);
@@ -171,9 +170,9 @@ static void cache_entry_free(CacheEntry *entry) {
  * @return 1-已过期，0-未过期
  */
 static int is_entry_expired(const CacheEntry *entry) {
-    if (entry == NULL || entry->value.rrs == NULL) {
+    if (entry == NULL || entry->value.rrs == NULL)
         return 1; // 没有数据视为过期
-    }
+
 
     const ms now = sys_time_ms();
     for (int i = 0; i < vector_size(entry->value.rrs); i++) {
@@ -182,9 +181,9 @@ static int is_entry_expired(const CacheEntry *entry) {
         if (rr == NULL||rr->ttl == UINT32_MAX) // 永不过期
             continue;
 
-        if ((now - entry->created_at) / 1000 >= (ms) rr->ttl) {
+        if ((now - entry->created_at) / 1000 >= (ms) rr->ttl)
             return 1;
-        }
+
     }
     return 0;
 }
@@ -196,9 +195,9 @@ static int is_entry_expired(const CacheEntry *entry) {
  * 仅调整 hotter/colder 指针，将 entry 从链表中安全地移除。
  */
 static void lru_remove(CacheEntry *entry) {
-    if (entry == NULL || entry->hotter == NULL || entry->colder == NULL) {
+    if (entry->hotter == NULL || entry->colder == NULL)
         return;
-    }
+
     entry->hotter->colder = entry->colder;
     entry->colder->hotter = entry->hotter;
     entry->hotter = NULL;
@@ -210,14 +209,12 @@ static void lru_remove(CacheEntry *entry) {
  * 先摘出再头插到 head 哨兵之后。
  */
 static void lru_touch(DnsCache *cache, CacheEntry *entry) {
-    if (cache == NULL || entry == NULL) {
+    if (cache == NULL || entry == NULL)
         return;
-    }
 
     // 从当前位置摘出（如果已在新条目中 hoter/colder 为 NULL，lru_remove 会安全跳过）
-    if (entry->hotter != NULL && entry->colder != NULL) {
+    if (entry->hotter != NULL && entry->colder != NULL)
         lru_remove(entry);
-    }
 
     // 头插
     entry->colder = cache->head->colder;
@@ -226,16 +223,15 @@ static void lru_touch(DnsCache *cache, CacheEntry *entry) {
     cache->head->colder = entry;
 }
 
-// ======================== 条目删除 ========================
 
 /**
  * 从 HashMap 和 LRU 链表中完全移除一条缓存条目，并释放其内存。
  * 注意：hash_map_remove 传入 free 以释放 HashMapEntry 持有的 key（先前 strdup 的拷贝）。
  */
 static void cache_remove_entry(CacheEntry *entry) {
-    if (g_cache == NULL || entry == NULL) {
+    if (g_cache == NULL || entry == NULL)
         return;
-    }
+
 
     lru_remove(entry);
 
@@ -243,9 +239,9 @@ static void cache_remove_entry(CacheEntry *entry) {
     hash_map_remove(g_cache->table, entry->key, free);
     cache_entry_free(entry);
 
-    if (g_cache->size > 0) {
+    if (g_cache->size > 0)
         g_cache->size--;
-    }
+
 }
 
 // ======================== 过期清理 ========================
@@ -255,17 +251,17 @@ static void cache_remove_entry(CacheEntry *entry) {
  * 遍历 LRU 链表，删除所有已过期的条目。
  */
 static int dns_cache_prune_locked(void) {
-    if (g_cache == NULL) {
+    if (g_cache == NULL)
         return -1;
-    }
+
 
     CacheEntry *entry = g_cache->head->colder;
     while (entry != g_cache->tail) {
         // 保存 next，因为当前 entry 可能在过期后被释放
         CacheEntry *next = entry->colder;
-        if (is_entry_expired(entry)) {
+        if (is_entry_expired(entry))
             cache_remove_entry(entry);
-        }
+
         entry = next;
     }
     return 0;
@@ -315,7 +311,7 @@ static int load_ip_table(const char *path) {
         char *domain = p;
         char *end = eq - 1;
         // trim
-        while (end >= domain && isspace((unsigned char)*end)) { *end = '\0'; end--; } // 为什么要*end=‘0’？在循环结束后end[1]='\0'不就行了
+        while (end >= domain && isspace((unsigned char)*end)) { *end = '\0'; end--; }
 
         // 获取ip串
         char *ip_str = eq + 1;
@@ -334,11 +330,11 @@ static int load_ip_table(const char *path) {
         Qtype type;
         struct in_addr v4;
         struct in6_addr v6;
-        if (inet_pton(AF_INET, ip_str, &v4) == 1) {
+        if (inet_pton(AF_INET, ip_str, &v4) == 1)
             type = QTYPE_A;
-        } else if (inet_pton(AF_INET6, ip_str, &v6) == 1) {
+        else if (inet_pton(AF_INET6, ip_str, &v6) == 1)
             type = QTYPE_AAAA;
-        } else {
+         else {
             do_log(WARN, "ip table line %d: invalid ip '%s', skipping", line_no, ip_str);
             continue;
         }
@@ -474,9 +470,9 @@ int dns_cache_init() {
  *
  */
 int dns_cache_put(const char *qname, Qtype type, Class qclass, CacheValue cache_value) {
-    if (g_cache == NULL || qname == NULL || cache_value.rrs == NULL) {
+    if (g_cache == NULL || qname == NULL || cache_value.rrs == NULL)
         return 1;
-    }
+
 
     /*
      * 流程：
@@ -560,15 +556,15 @@ int dns_cache_put(const char *qname, Qtype type, Class qclass, CacheValue cache_
  * @return 0-命中，1-miss
  */
 int dns_cache_get(const char *qname, Qtype type, Class qclass, CacheValue *result) {
-    if (g_cache == NULL || qname == NULL || result == NULL) {
+    if (g_cache == NULL || qname == NULL || result == NULL)
         return 1;
-    }
+
 
     // 这个key是临时堆内存数据，需要free
     char *key = cache_key_create(qname, type, qclass);
-    if (key == NULL) {
+    if (key == NULL)
         return 1;
-    }
+
 
    // 加锁
     if (mtx_lock(&g_cache->lock) != thrd_success) {
@@ -640,13 +636,13 @@ int dns_cache_prune() {
  * @return 0-成功，1-失败
  */
 int dns_cache_free() {
-    if (g_cache == NULL) {
+    if (g_cache == NULL)
         return 0;
-    }
 
-    if (mtx_lock(&g_cache->lock) != thrd_success) {
+
+    if (mtx_lock(&g_cache->lock) != thrd_success)
         return 1;
-    }
+
 
     // 遍历 LRU 释放所有缓存条目
     CacheEntry *entry = g_cache->head->colder;

@@ -37,7 +37,6 @@ static uint64_t swap_8(uint64_t value) {
 
 // 内部辅助函数：16字节反转
 static void swap_16(const uint8_t src[16], uint8_t dst[16]) {
-    // if (!src || !dst) return;
     for (int i = 0; i < 16; i++)
         dst[i] = src[15 - i];
 }
@@ -53,20 +52,19 @@ void h2n_4(uint32_t* host) {
 }
 
 void h2n_8(uint64_t* host) {
-    if (is_little_endian()) {
+    if (is_little_endian())
         *host =  swap_8(*host);
-    }
+
 }
 
 void h2n_16(const uint8_t host[16], uint8_t net[16]) {
     if (!host || !net) return;
 
-    if (is_little_endian()) {
+    if (is_little_endian())
         swap_16(host, net);
-    } else {
-        // 大端序机器直接拷贝
-        memcpy(net,host,16);
-    }
+     else
+        memcpy(net,host,16); // 大端序机器直接拷贝
+
 }
 
 // ==================== 公开API：网络序 -> 主机序 ====================
@@ -80,19 +78,19 @@ void n2h_4(uint32_t* net) {
 }
 
 void n2h_8(uint64_t* net) {
-    if (is_little_endian()) {
+
+    if (is_little_endian())
         *net = swap_8(*net);
-    }
+
 }
 
 void n2h_16(const uint8_t net[16], uint8_t host[16]) {
     if (!net || !host) return;
 
-    if (is_little_endian()) {
+    if (is_little_endian())
         swap_16(net, host);
-    } else {
-        // 大端序机器直接拷贝
-        memcpy(host,net,16);
-    }
+     else
+        memcpy(host,net,16); // 大端序机器直接拷贝
+
 }
 

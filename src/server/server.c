@@ -140,9 +140,9 @@ static void batch_timeout() {
     Session *session = NULL;
     ms time_remain;
     while ((session = session_peek())) {
+
         get_session_timeout_remain(session, request_timeout, &time_remain);
-        if (time_remain > 0)
-            break;
+        if (time_remain > 0) break;
 
         do_log(WARN, "session timeout (%d-%d).", session->client_id, session->relay_info.relay_packet->header.id);
 
@@ -224,9 +224,7 @@ static int server_loop() {
 
         do_log(TRACE,"sleep with timeout %ld",next_timeout);
         ex_try(); // 开启错误上下文
-        socket_sleep_on(socket_holder, 1, next_timeout);
-        if (!ex_catch()) {
-            // 收取dns数据包，select没有错误
+        if (socket_sleep_on(socket_holder, 1, next_timeout)>=0) {
 
             DnsPacket *packet;
             NetEnd source_end;
@@ -297,14 +295,17 @@ int server_config_parser(const char* key,const char* value,T* result) {
         *result = ups;
         return 0;
     }
+
     if (!strcmp(key,KEY_MAX_RETRY_TIME)) {
         *result = (T) atol(value); // atol : 字符串转long
         return 0;
     }
+
     if (!strcmp(key,KEY_PACKET_TIMEOUT)) {
         *result = (T) (atol(value) * 1000);
         return 0;
     }
+
     // 降级为原字符串
     return -1;
 }
@@ -331,7 +332,7 @@ int server_start() {
     //初始化降级策略配置
     config_get(SERV_SECTION,KEY_PACKET_TIMEOUT, (T *) &request_timeout);
     config_get(SERV_SECTION,KEY_MAX_RETRY_TIME, (T *) &max_retry_time);
-    if (ex_catch())do_log(ERROR, "serv_config read failed %s", ex_end());
+    if (ex_catch()) do_log(ERROR, "serv_config read failed %s", ex_end());
 
     //获取上游服务器列表
     config_get(SERV_SECTION,KEY_UPSTREAMS, (T *) &upstreams);
@@ -341,9 +342,11 @@ int server_start() {
     }
 
     //创建守护线程
-    thrd_t cache_ttl;
-    thrd_create(&cache_ttl, daemon_dnscache_ttl,NULL);
-    thrd_detach(cache_ttl);
+    if (is_using_cache()) {
+        thrd_t cache_ttl;
+        thrd_create(&cache_ttl, daemon_dnscache_ttl,NULL);
+        thrd_detach(cache_ttl);
+    }
 
     //初始化socket
     ex_try();
@@ -357,4 +360,5 @@ int server_start() {
     send_buf = malloc(DNS_SEND_BUF_SIZE);
     return server_loop();
 }
+
 

@@ -22,22 +22,22 @@ TIMEOUT=${TIMEOUT:-2.0}
 
 # ─── 检查 Python venv ───
 if [ ! -f "$VENV_DIR/bin/python" ]; then
-    echo "[ERROR] 虚拟环境不存在: $VENV_DIR"
-    exit 1
+  echo "[ERROR] 虚拟环境不存在: $VENV_DIR"
+  exit 1
 fi
 PYTHON="$VENV_DIR/bin/python"
 
 "$PYTHON" -c "import dns.query" 2>/dev/null || {
-    echo "[INFO] 安装 dnspython..."
-    "$VENV_DIR/bin/pip" install -q dnspython
+  echo "[INFO] 安装 dnspython..."
+  "$VENV_DIR/bin/pip" install -q dnspython
 }
 
 # ─── 运行 ───
 echo "目标: $SERVER:$PORT | 查询数: $QUERY_NUM | 线程: $WORKERS | 超时: ${TIMEOUT}s"
 
 "$PYTHON" "$BENCH_SCRIPT" \
-    --server "$SERVER" \
-    --port "$PORT" \
-    --num "$QUERY_NUM" \
-    --timeout "$TIMEOUT" \
-    --workers "$WORKERS"
+  --server "$SERVER" \
+  --port "$PORT" \
+  --num "$QUERY_NUM" \
+  --timeout "$TIMEOUT" \
+  --workers "$WORKERS"

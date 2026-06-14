@@ -47,38 +47,36 @@ int socket_bind(SocketHolder socket,u_int16_t port) {
  * @return >0-拷贝到内核缓冲区的字节数，0-发送了0字节，-1-错误
  */
 int socket_send(SocketHolder socket,const void *buf, size_t buf_len,NetEnd dest) {
-    // 构造地址
+
+    struct sockaddr_storage addr_storage;
     struct sockaddr *addr;
-    int add_len;
+    socklen_t addr_len;
+
+    memset(&addr_storage, 0, sizeof(addr_storage));
+    // 根据地址类型强转
     if (dest.version == IPV4) {
-        struct sockaddr_in *in_addr = malloc(sizeof(struct sockaddr_in));
-        memset(in_addr, 0, sizeof(struct sockaddr_in));
+        struct sockaddr_in *in_addr = (struct sockaddr_in *) &addr_storage;
         in_addr->sin_family = AF_INET;
-        in_addr->sin_addr.s_addr = dest.addr.ipv4; //
-        in_addr->sin_port = dest.port; //NetEnd 里的地址端口都是网络序
+        in_addr->sin_addr.s_addr = dest.addr.ipv4;
+        in_addr->sin_port = dest.port; // NetEnd 里的地址端口都是网络序
 
         addr = (struct sockaddr *) in_addr;
-        add_len = sizeof(struct sockaddr_in);
+        addr_len = sizeof(struct sockaddr_in);
     } else {
-        //ipv6
-
-        struct sockaddr_in6 *in_addr = malloc(sizeof(struct sockaddr_in6));
-        memset(in_addr, 0, sizeof(struct sockaddr_in6));
-        in_addr->sin6_port = dest.port;
+        struct sockaddr_in6 *in_addr = (struct sockaddr_in6 *) &addr_storage;
         in_addr->sin6_family = AF_INET6;
+        in_addr->sin6_port = dest.port;
         memcpy(in_addr->sin6_addr.__in6_u.__u6_addr8, dest.addr.ipv6, 16);
 
         addr = (struct sockaddr *) in_addr;
-        add_len = sizeof(struct sockaddr_in6);
-    }
-    //发包
-    int ret;
-    ret = sendto(socket, buf, buf_len,MSG_DONTWAIT, addr, add_len);
-    if (ret == -1) {
-         ex_throw("syscall sendto :%s",strerror(errno));
+        addr_len = sizeof(struct sockaddr_in6);
     }
 
-    free(addr);
+    int ret = sendto(socket, buf, buf_len, MSG_DONTWAIT, addr, addr_len);
+    if (ret == -1) {
+        ex_throw("syscall sendto :%s", strerror(errno));
+    }
+
     return ret;
 }
 
@@ -95,14 +93,17 @@ int socket_recv_nowait(SocketHolder socket,void *buf, size_t buf_len, NetEnd *so
     struct sockaddr_in6 src;
     socklen_t addrlen = sizeof(src);
 
-    //收包
+    //收数据
     rn = recvfrom(socket, buf, buf_len,MSG_DONTWAIT, (struct sockaddr *) &src, &addrlen);
     if (rn == -1) {
-        if (errno==EAGAIN||errno==EWOULDBLOCK)
+        // 没数据,正常返回
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
             return 0;
-        ex_throw("syscall recvfrom: %s",strerror(errno));
+        // 出错了
+        ex_throw("syscall recvfrom: %s", strerror(errno));
         return rn;
     }
+
     // 拿地址
     if (IN6_IS_ADDR_V4MAPPED(&src.sin6_addr)) {
         memcpy(&source->addr.ipv4, &src.sin6_addr.__in6_u.__u6_addr32[3], 4);
@@ -130,10 +131,11 @@ int socket_release(SocketHolder socket) {
  * @return
  */
 int socket_sleep_on(SocketHolder socket_holder,int socket_cnt,ms timeout) {
-    // 准备参数
+    // 准备参数 要监听的socket集合
     fd_set set;
     FD_ZERO(&set);
     FD_SET(socket_holder, &set); // 设置要监听的socket集合
+    // 准备参数 超时时间
     struct timeval *timeptr;
     struct timeval time;
     if (timeout < 0)
@@ -147,6 +149,7 @@ int socket_sleep_on(SocketHolder socket_holder,int socket_cnt,ms timeout) {
     // 错误记录
     if (ret < 0)
         ex_throw("syscall select:%s",strerror(errno));
+
     return ret;
 }
 
@@ -155,7 +158,7 @@ int socket_sleep_on(SocketHolder socket_holder,int socket_cnt,ms timeout) {
      memset(result, 0, sizeof(NetEnd));
 
      // inet_pton ：ip字符串转二进制，1解析成功，0格式错误，-1协议族不支持
-     // IPv4
+     // 尝试 IPv4
      if (inet_pton(AF_INET, ip_str, &result->addr.ipv4) == 1) {
          result->version = IPV4;
          result->port = htons(53);

@@ -144,8 +144,17 @@ typedef struct {
  * 全程都不需要解析RR里面的rdata
 */
 
-
+/**
+ * 初始化dns解析器配置
+ * @return 0-正常,1-出错
+ */
 int dns_resolver_init();
+
+/**
+ * 获取当前dns解析器是否启用缓存的配置值
+ * @return
+ */
+int is_using_cache();
 
 //初始化一条RR记录
 ResourceRecord *rr_create();

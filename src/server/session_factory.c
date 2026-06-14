@@ -20,15 +20,18 @@ static LazyHeap *sessions_queue; //用于超时管理
  */
 static int session_comparator(void* a, void* b) {
     //时间早的放前面
-    if (a == NULL)return -1;
-    if (b == NULL)return 1;
+    if (a == NULL) return -1;
+    if (b == NULL) return 1;
+
     Session *a_session = a;
     Session *b_session = b;
+
     long long interval = a_session->relay_info.timestamp - b_session->relay_info.timestamp;
-    if (interval > 0)return 1;
-    if (interval < 0)return -1;
-    //先按时间排序，如果时间不一样那就是不一样的条目
-    if (a_session == b_session)return 0;
+    if (interval > 0) return 1;
+    if (interval < 0) return -1;
+
+    //按时间排序，如果时间不一样那就是不一样的条目
+    if (a_session == b_session) return 0;
     return 0;
 }
 
@@ -52,11 +55,14 @@ int session_factory_init() {
 
 
 Session * session_get(const DnsPacket* relay_response) {
-    if (!relay_response)return NULL;
+    if (!relay_response) return NULL;
+
     uint16_t id = relay_response->header.id;
     T ses;
+
     if (hash_map_get(agent_id_sessions, (K) id, &ses))
         return NULL;
+
     return ses;
 }
 
@@ -127,12 +133,17 @@ int session_wait(Session *session){
 int session_open(uint16_t client_id,NetEnd client_ip,const DnsPacket * relay_pack) {
     Session *session = malloc(sizeof(Session));
     do_log(DEBUG, "session open for cli-%d,reid-%d", client_id, relay_pack->header.id);
+
+    // 创建会话
     session->client_id = client_id;
     session->client_ip = client_ip;
     session->relay_info.retry_times = 0;
     session->relay_info.relay_packet = packet_clone(relay_pack);
+
+    // 存储会话
     hash_map_put(agent_id_sessions, (K) session->relay_info.relay_packet->header.id, session);
     session_wait(session);
+
     return 0;
 }
 

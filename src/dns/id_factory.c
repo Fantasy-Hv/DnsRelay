@@ -7,26 +7,21 @@ static char st[65536];
 
 int id_pool_init() {
     top = 65535;
-    for (int i = 0; i < 65536; i++) {
+    for (int i = 0; i < 65536; i++)
         ids[i] = (uint16_t) i;
-    }
+
     memset(st, 0, sizeof(st));
     return 0;
 }
 
 int id_alloc(uint16_t* id) {
-    if (id == NULL) {
+    if (id == NULL||top < 0)
         return 1;
-    }
-
-
-    if (top < 0) {
-        return 1;
-    }
 
     *id = ids[top];
     st[*id] = 1;
     top--;
+
     return 0;
 }
 
