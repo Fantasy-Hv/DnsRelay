@@ -16,8 +16,8 @@
 #include "infra/exception.h"
 static ms request_timeout = VALUE_DEFAULT_REQUEST_TIMEOUT*1000;
 static int max_retry_time = VALUE_DEFAULT_MAX_RETRY_TIME;
-#define DNS_RECV_BUF_SIZE 1024
-#define DNS_SEND_BUF_SIZE 1024
+#define DNS_RECV_BUF_SIZE 4096
+#define DNS_SEND_BUF_SIZE 4096
 
 /**
  * 套接字引用
@@ -144,7 +144,7 @@ static void batch_timeout() {
         get_session_timeout_remain(session, request_timeout, &time_remain);
         if (time_remain > 0) break;
 
-        do_log(WARN, "session timeout (%d-%d).", session->client_id, session->relay_info.relay_packet->header.id);
+        do_log(WARN, "session timeout (%d-%d)", session->client_id, session->relay_info.relay_packet->header.id);
 
         do_handle_timeout(session);
     }
