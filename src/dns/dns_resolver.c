@@ -6,13 +6,32 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+
+#include "infra/config.h"
 #include "infra/exception.h"
 #include "infra/logger.h"
 #include "infra/utils.h"
 #define DNS_REV_BUF_SIZE 1024
+static int use_cache = VALUE_DEFAULT_USE_CACHE;
 
 
+// void (*ConfigCleaner)(const char* key,T value);
+int dns_resolver_config_parser(const char* key,const char* value,T* result){
+    if (strcasecmp(key,KEY_USE_CACHE)) {
+        *result = (T)atoi(value);
+        if (*result!=0&& ((long)*result)!=1) {
+            *result = (T)1;
+            ex_throw("dns_config_parser:usecache config invalid");
+            return 1;
+        }
+    }
+    return 0;
+}
 
+int dns_resolver_init() {
+     config_register_parser(SECTION_DNS_RESOLVER,dns_resolver_config_parser);
+    return config_get(SECTION_DNS_RESOLVER,KEY_USE_CACHE,(T*)&use_cache);
+}
 /**
  * 将人类可读的域名字符串转为dns wire编码
  * "www.baidu.com" -> "\x03www\x05baidu\x03com\x00"
@@ -829,7 +848,7 @@ PacketDirection pack_try_response_local(const DnsPacket *query, DnsPacket **resp
             CacheValue cache_value;
             SectionQuestion *q = vector_get(query->questions, 0);
             do_log(INFO, "id %d,qname: [%s]", query->header.id, q->qname);
-            if (dns_cache_get(q->qname, q->qtype, q->qclass, &cache_value)) {
+            if (!use_cache||dns_cache_get(q->qname, q->qtype, q->qclass, &cache_value)) {
                 // 缓存没有，看Rd
                 do_log(DEBUG, "cache miss");
                 if (RD_GET(query->header.flags))

@@ -85,6 +85,7 @@ int main(int argc,char* argv[]) {
         do_log(ERROR,"cache init failed: %s",ex_end());
         return 1;
     }
+    if (dns_resolver_init())
     ex_try();
     if (session_factory_init()) {
         do_log( ERROR, "session_factory_init failed:%s",ex_end());

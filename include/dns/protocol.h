@@ -5,6 +5,9 @@
 #include "infra/stl.h"
 #include <stdint.h>
 #define MAX_PACKET_SIZE 512
+#define SECTION_DNS_RESOLVER "dnsresolver"
+#define KEY_USE_CACHE "usecache"
+#define VALUE_DEFAULT_USE_CACHE 1
 //0=查询报文，1=响应报文
 #define IS_QUERY(flags) ((flags >> 15)^1)
 #define QR_SET(flags) (flags|=0x8000)
@@ -140,6 +143,9 @@ typedef struct {
  * 上游响应回来后，以RRs为单位放入缓存，下次可以直接根据Question查到对应RR
  * 全程都不需要解析RR里面的rdata
 */
+
+
+int dns_resolver_init();
 
 //初始化一条RR记录
 ResourceRecord *rr_create();
