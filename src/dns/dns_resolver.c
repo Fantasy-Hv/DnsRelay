@@ -767,14 +767,52 @@ static int make_response_fail(const DnsPacket *query, DnsPacket **fail, Rcode rc
 @param rcode 响应状态，如果为NOERROR即为放行请求。其他情况为拒绝请求
  * @return
  */
-static void query_pre_validate(const DnsPacket *pack, Rcode *rcode) {
-    *rcode = RCODE_NOERROR;
-}
 
 // 检查该块内存区域是否全0
 static int memallz(const char *mem, int len) {
     while (len > 0 && mem[--len] == 0);
     return !len;
+}
+
+/**
+ * 获取 DNS 编码域名的父域名（跳过最左边的标签）
+ * e.g. "\x03www\x06github\x03com\x00" -> "\x06github\x03com\x00"
+ * @param qname  DNS 编码的域名
+ * @return 指向父域名的指针（仍在 qname 内存中），无父域名时返回 NULL
+ */
+static const char *get_parent_qname(const char *qname) {
+    // NULL、根域、或遇到 DNS 指针压缩标记时返回 NULL
+    if (!qname || *qname == '\0' || (*qname & 0xC0) == 0xC0) return NULL;
+    const char *parent = qname + 1 + (unsigned char)*qname;
+    return (*parent == '\0') ? NULL : parent;
+}
+
+static void query_pre_validate(const DnsPacket *pack, Rcode *rcode) {
+    *rcode = RCODE_NOERROR;
+
+    // 父域名拦截检查：逐级向上查找是否有被封锁的父域名
+
+    SectionQuestion *q = vector_get(pack->questions, 0);
+    if (!q) return;
+
+    const char *parent_qname = q->qname;
+    while (parent_qname) {
+        CacheValue parent_value;
+         // 从缓存中查是否存在父域名被禁用
+        if (dns_cache_get(parent_qname, q->qtype, q->qclass, &parent_value) == 0) {
+            for (int i = 0; i < vector_size(parent_value.rrs); i++) {
+                ResourceRecord *rr = vector_get(parent_value.rrs, i);
+                if ((rr->type == QTYPE_A || rr->type == QTYPE_AAAA)
+                    && memallz(rr->rdata, rr->rdata_length)) {
+                    *rcode = RCODE_NXDOMAIN;
+                    free_rrs(parent_value.rrs);
+                    return;
+                }
+            }
+            free_rrs(parent_value.rrs);
+        }
+        parent_qname = get_parent_qname(parent_qname);
+    }
 }
 
 /**
@@ -884,7 +922,7 @@ PacketDirection pack_try_response_local(const DnsPacket *query, DnsPacket **resp
             CacheValue cache_value;
             SectionQuestion *q = vector_get(query->questions, 0);
             do_log(INFO, "id %d,qname: [%s]", query->header.id, q->qname);
-            if (!use_cache||dns_cache_get(q->qname, q->qtype, q->qclass, &cache_value)) {
+            if (dns_cache_get(q->qname, q->qtype, q->qclass, &cache_value)) {
                 // 缓存没有，看Rd
                 if (use_cache)
                     do_log(DEBUG, "cache miss");
